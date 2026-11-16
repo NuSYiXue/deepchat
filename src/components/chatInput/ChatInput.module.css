@@ -251,12 +251,35 @@
   min-width: 0;
 }
 
-/* 模型/人设选择器：与开关同高，宽度随内容；空间不足时先被压缩 */
-.select {
+/* 模型/人设选择器：视觉与相邻的深度思考/智能搜索开关对齐——
+   同高、同圆角、透明底 + 1px 边框、13px/500 字重，空间不足时先被压缩。
+   叠一层 .toggles 提升优先级，确保压过 Select 组件自身的触发器样式。 */
+.toggles .select {
   flex-shrink: 1;
   min-width: 0;
   max-width: 180px;
   height: 34px;
+  /* 右侧多留出箭头的位置；左侧和开关一致 */
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+  }
+
+  /* 箭头跟随更小的内边距；Select 自身固定 14px */
+  & > span:last-child {
+    right: 10px;
+  }
 }
 
 .collapsedToggles .toggleLabel {
