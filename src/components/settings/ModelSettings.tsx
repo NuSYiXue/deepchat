@@ -22,6 +22,7 @@ import { useTranslate } from '../../i18n/index.js'
 import {
   deleteEndpoint,
   deleteModel,
+  listEndpointModels,
   saveEndpoint,
   saveModel,
   testEndpoint,
@@ -259,6 +260,14 @@ const ProviderEditor = ({
 
   const isNew = (id: string) => !models.some((item) => item.id === id)
 
+  /**
+   * 内置端点完全沿用项目原本的配置，只开放 API Key 可改。
+   *
+   * 它的 origin / 方言 / 搜索能力都由程序决定：这些一旦被改坏，「深度思考」
+   * 回落、语音、附件上传等依赖官方能力的路径都会失效。
+   */
+  const locked = endpoint?.builtin === true
+
   return (
     <div className={styles.editor}>
       <div className={styles.editorHeader}>
@@ -272,6 +281,7 @@ const ProviderEditor = ({
             className={styles.input}
             value={draft?.name ?? ''}
             placeholder={t('settingsEndpointNamePlaceholder')}
+            readOnly={locked}
             onChange={(e) => draft && setDraft({ ...draft, name: e.target.value })}
           />
         </Field>
@@ -281,6 +291,7 @@ const ProviderEditor = ({
             value={draft?.origin ?? ''}
             placeholder="https://api.deepseek.com"
             spellCheck={false}
+            readOnly={locked}
             onChange={(e) => draft && setDraft({ ...draft, origin: e.target.value })}
           />
         </Field>
@@ -298,6 +309,7 @@ const ProviderEditor = ({
             className={styles.select}
             value={draft?.dialect ?? 'deepseek'}
             options={DIALECTS.map((dialect) => ({ value: dialect, label: dialect }))}
+            disabled={locked}
             onChange={(dialect) => draft && setDraft({ ...draft, dialect })}
           />
         </Field>
@@ -307,10 +319,15 @@ const ProviderEditor = ({
         <input
           type="checkbox"
           checked={draft?.nativeWebSearch ?? false}
+          disabled={locked}
           onChange={(e) => draft && setDraft({ ...draft, nativeWebSearch: e.target.checked })}
         />
         {t('settingsNativeSearch')}
       </label>
+
+      {locked ? (
+        <p className={styles.reasoningHint}>{t('settingsBuiltinEndpointHint')}</p>
+      ) : null}
 
       <EditorFooter
         busy={busy}
@@ -474,13 +491,16 @@ const ModelFields = ({
   return (
     <div className={styles.modelAdvanced}>
       <Field label={t('settingsModelUpstream')}>
-        <input
-          className={styles.input}
-          value={value.model}
-          placeholder="deepseek-flash"
-          spellCheck={false}
-          onChange={(e) => onChange({ ...value, model: e.target.value })}
-        />
+        <div className={styles.upstreamRow}>
+          <input
+            className={styles.input}
+            value={value.model}
+            placeholder="deepseek-flash"
+            spellCheck={false}
+            onChange={(e) => onChange({ ...value, model: e.target.value })}
+          />
+          <ModelPicker endpointId={value.endpointId} onPick={(id) => onChange({ ...value, model: id })} />
+        </div>
       </Field>
       <Field label={t('settingsModelName')}>
         <input
@@ -737,6 +757,88 @@ const ReasoningEditor = ({
       ) : (
         <p className={styles.reasoningHint}>{t('settingsReasoningOffHint')}</p>
       )}
+    </div>
+  )
+}
+
+/**
+ * 「获取可用模型」：向端点查询模型列表并让用户挑一个。
+ *
+ * 查询走 `/api/config/models/list`，用已保存的端点配置与密钥；拿不到时
+ * 保留手动输入，不阻塞流程。
+ */
+const ModelPicker = ({
+  endpointId,
+  onPick,
+}: {
+  endpointId: string
+  onPick: (id: string) => void
+}) => {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [models, setModels] = useState<{ id: string; name: string | null }[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const list = await listEndpointModels(endpointId)
+      setModels(list)
+      setOpen(true)
+      if (list.length === 0) {
+        setError(t('settingsFetchModelsEmpty'))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setModels(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className={styles.pickerWrap}>
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        disabled={busy}
+        onClick={() => void load()}
+      >
+        {busy ? t('settingsFetchingModels') : t('settingsFetchModels')}
+      </button>
+
+      {open && models ? (
+        <div className={styles.pickerPanel}>
+          <div className={styles.pickerHead}>
+            <span className={styles.fieldLabel}>{t('settingsAvailableModels')}</span>
+            <button type="button" className={styles.linkButton} onClick={() => setOpen(false)}>
+              {t('close')}
+            </button>
+          </div>
+          <div className={styles.pickerList}>
+            {models.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                className={styles.pickerItem}
+                onClick={() => {
+                  onPick(model.id)
+                  setOpen(false)
+                }}
+              >
+                <span className={styles.pickerId}>{model.id}</span>
+                {model.name && model.name !== model.id ? (
+                  <span className={styles.pickerName}>{model.name}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {error ? <div className={styles.noticeError}>{error}</div> : null}
     </div>
   )
 }

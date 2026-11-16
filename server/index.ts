@@ -133,6 +133,16 @@ router.post('/api/upload', async ({ req, url }) =>
   json(await chat.upload(req, url.searchParams.get('modelId') ?? undefined))
 )
 
+router.post('/api/config/models/list', async ({ req }) => {
+  const body = (await req.json()) as { endpointId?: unknown; draft?: unknown }
+  return json(
+    await chat.listModels(
+      typeof body.endpointId === 'string' ? body.endpointId : null,
+      (body.draft ?? undefined) as { origin?: string; apiKey?: string; dialect?: string } | undefined
+    )
+  )
+})
+
 router.post('/api/config/test-endpoint', async ({ req }) => {
   const body = (await req.json()) as { endpointId?: unknown }
   if (typeof body.endpointId !== 'string') {

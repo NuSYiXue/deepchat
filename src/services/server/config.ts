@@ -150,6 +150,19 @@ export const deleteModel = async (id: string): Promise<void> => {
   await reloadConfig()
 }
 
+/** 拉取端点可用模型；draft 允许用编辑器里的未保存值探测 */
+export const listEndpointModels = async (
+  endpointId: string | null,
+  draft?: { origin?: string; apiKey?: string; dialect?: string }
+): Promise<{ id: string; name: string | null }[]> => {
+  const result = await sendJson<{ models: { id: string; name: string | null }[] }>(
+    '/api/config/models/list',
+    'POST',
+    { endpointId, draft }
+  )
+  return result.models
+}
+
 export const testEndpoint = async (endpointId: string): Promise<void> => {
   await sendJson('/api/config/test-endpoint', 'POST', { endpointId })
 }

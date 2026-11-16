@@ -18,6 +18,8 @@ export type EndpointRow = {
   api_key: string
   dialect: string
   capabilities: string
+  /** 1 表示内置 DeepSeek 官方端点 */
+  builtin: number
 }
 
 export type Capabilities = {
@@ -191,6 +193,7 @@ export const buildUpstreamBody = (
   body: ChatRequestBody,
   capabilities: Capabilities,
   dialect: string,
+  builtin: boolean,
   efforts?: ReasoningEfforts
 ): Record<string, unknown> => {
   const messages = capabilities.latestReminder
@@ -204,24 +207,23 @@ export const buildUpstreamBody = (
   if (typeof body.system === 'string' && body.system !== '') {
     payload.system = body.system
   }
-  // 推理由两层决定：
-  // - 模型配置声明了档位（设置 → 模型 → 推理等级）才具备推理能力；
-  // - 本轮是否真的推理，由聊天窗口的「深度思考」开关决定。
-  // 两者都满足才发送推理参数。
-  const wantsThinking = body.thinking?.type === 'enabled'
-  if (wantsThinking) {
+  // 推理参数分两种来源：
+  // - 内置 DeepSeek 端点：完全沿用项目原本的行为，由聊天窗口的「深度思考」开关
+  //   决定 thinking.enabled/disabled，与本改造之前一致；
+  // - 自定义端点：推理由模型配置的「推理等级」独立决定，不受该开关影响
+  //   （界面上该按钮也已被置灰）。
+  if (builtin) {
+    payload.thinking = body.thinking ?? { type: 'disabled' }
+  } else {
     const reasoningFields = buildReasoning(efforts, dialect, body.reasoningLevel)
     if (reasoningFields.thinking !== undefined) {
       payload.thinking = reasoningFields.thinking
     } else if (reasoningFields.reasoning_effort !== undefined) {
       payload.reasoning_effort = reasoningFields.reasoning_effort
     } else {
-      // 模型没声明档位时，至少按开关发一个基础 thinking
-      payload.thinking = body.thinking ?? { type: 'enabled' }
+      // 模型没声明档位即不推理
+      payload.thinking = { type: 'disabled' }
     }
-  } else {
-    // 明确关闭，避免上游按自己的默认开启思考
-    payload.thinking = { type: 'disabled' }
   }
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     payload.tools = body.tools
@@ -336,7 +338,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       }
 
       const reasoning = modelConfig
-      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect, reasoning)
+      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect, endpoint.builtin === 1, reasoning)
       // 前端传的 model 是模型 id 或上游模型名；以配置表里的为准
       upstreamBody.model = model
       // 输出上限：请求没指定时用模型配置值
@@ -460,6 +462,58 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         throw new HttpError(response.status, await response.text().catch(() => response.statusText))
       }
       return { ok: true, models: await response.json().catch(() => null) }
+    },
+
+    /**
+     * 拉取端点可用的模型列表，供设置页「获取可用模型」使用。
+     *
+     * OpenAI 与 DeepSeek 返回 `{ data: [{ id }] }`，Anthropic 的条目可能带
+     * `display_name`。允许传入编辑器里尚未保存的 origin / key，这样新建端点
+     * 填完就能直接拉取，不必先保存。
+     */
+    listModels: async (
+      endpointId: string | null,
+      draft?: { origin?: string; apiKey?: string; dialect?: string }
+    ): Promise<{ models: { id: string; name: string | null }[] }> => {
+      const saved = endpointId ? findEndpoint(endpointId) : undefined
+      const origin = (draft?.origin ?? saved?.origin ?? '').replace(/\/+$/, '')
+      const apiKey = draft?.apiKey ?? saved?.api_key ?? ''
+      const dialect = draft?.dialect ?? saved?.dialect ?? 'deepseek'
+      if (!origin) {
+        throw new HttpError(400, 'endpoint URL is required')
+      }
+      if (!apiKey) {
+        throw new HttpError(400, 'API key is empty')
+      }
+      const target = dialect === 'openai' ? `${origin}/v1/models` : `${origin}/models`
+      const response = await fetch(target, {
+        headers: { authorization: `Bearer ${apiKey}` },
+      }).catch((error: unknown) => {
+        throw new HttpError(502, `request failed: ${String(error)}`)
+      })
+      if (!response.ok) {
+        throw new HttpError(response.status, await response.text().catch(() => response.statusText))
+      }
+      const payload = (await response.json().catch(() => null)) as unknown
+      const list =
+        typeof payload === 'object' &&
+        payload !== null &&
+        Array.isArray((payload as { data?: unknown }).data)
+          ? ((payload as { data: unknown[] }).data as Record<string, unknown>[])
+          : []
+      const models = list
+        .map((item) => {
+          const id = typeof item.id === 'string' ? item.id : null
+          const name =
+            typeof item.display_name === 'string'
+              ? item.display_name
+              : typeof item.name === 'string'
+                ? item.name
+                : null
+          return id ? { id, name } : null
+        })
+        .filter((item): item is { id: string; name: string | null } => item !== null)
+      return { models }
     },
 
     /** 语音识别：DeepSeek 私有工具接口 */

@@ -1,6 +1,11 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsAvailableModels: 'Available models',
+  settingsFetchModelsEmpty: 'The endpoint returned no models; enter one manually',
+  settingsFetchingModels: 'Fetching…',
+  settingsFetchModels: 'Fetch models',
+  settingsBuiltinEndpointHint: 'Only the API key is editable on the built-in endpoint',
   settingsBuiltinCannotDelete: 'The built-in endpoint cannot be removed',
   settingsTagBuiltin: 'Built-in',
   thinkingUnavailableTooltip: 'Reasoning is disabled for this model',

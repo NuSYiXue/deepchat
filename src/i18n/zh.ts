@@ -1,4 +1,9 @@
 export const zh = {
+  settingsAvailableModels: '可用模型',
+  settingsFetchModelsEmpty: '端点没有返回模型列表，请手动填写',
+  settingsFetchingModels: '获取中...',
+  settingsFetchModels: '获取可用模型',
+  settingsBuiltinEndpointHint: '内置端点只可修改 API Key，其余配置由程序固定',
   settingsBuiltinCannotDelete: '内置端点不可删除',
   settingsTagBuiltin: '内置',
   thinkingUnavailableTooltip: '当前模型未开启推理等级',

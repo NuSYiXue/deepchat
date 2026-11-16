@@ -62,20 +62,24 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     sessionId !== null ? state.sessionCache[sessionId]?.modelId : undefined
   )
   const pendingModelId = usePendingSelection((state) => state.modelId)
-  /**
-   * 深度思考是模型推理能力的使用开关：当前模型在设置里没有开启推理等级时，
-   * 按钮置灰——否则打开也不会产生任何效果。
-   *
-   * 订阅 models 而不是直接读 store：设置页保存后会 reloadConfig，
-   * 只有订阅了才能在这里重新计算。
-   */
-  const reasoningAvailable = useConfig((state) => {
-    const target = resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
-    return Object.keys(target?.reasoning ?? {}).length > 0
-  })
   const currentModel = useConfig((state) =>
     resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
   )
+  /**
+   * 深度思考只对内置 DeepSeek 端点生效——它走的是项目原本的扩展协议。
+   *
+   * 自定义端点的推理由模型设置里的「推理等级」独立决定，那个开关的定义与
+   * 官方 thinking 协议并不等价，混用会让同一按钮在两套语义间摇摆。
+   * 因此使用自定义端点的模型时，深度思考按钮置灰。
+   */
+  const reasoningAvailable = useConfig((state) => {
+    const target = resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
+    if (!target) {
+      return false
+    }
+    const endpoint = state.endpoints.find((item) => item.id === target.endpointId)
+    return endpoint?.builtin === true
+  })
   const accept = acceptFor(currentModel?.inputTypes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
