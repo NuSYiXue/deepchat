@@ -32,8 +32,9 @@ import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { ChatModelSelect, ChatPersonaSelect } from './ChatModelSelect.js'
-import { resolveModel } from '../../services/server/config.js'
+import { resolveModelFrom } from '../../services/server/config.js'
 import { usePendingSelection } from '../../services/chat/drafts.js'
+import { useConfig } from '../../services/server/config.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.css'
 
@@ -61,9 +62,21 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     sessionId !== null ? state.sessionCache[sessionId]?.modelId : undefined
   )
   const pendingModelId = usePendingSelection((state) => state.modelId)
-  const accept = acceptFor(
-    resolveModel(sessionId === null ? pendingModelId : sessionModelId)?.inputTypes
+  /**
+   * 深度思考是模型推理能力的使用开关：当前模型在设置里没有开启推理等级时，
+   * 按钮置灰——否则打开也不会产生任何效果。
+   *
+   * 订阅 models 而不是直接读 store：设置页保存后会 reloadConfig，
+   * 只有订阅了才能在这里重新计算。
+   */
+  const reasoningAvailable = useConfig((state) => {
+    const target = resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
+    return Object.keys(target?.reasoning ?? {}).length > 0
+  })
+  const currentModel = useConfig((state) =>
+    resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
   )
+  const accept = acceptFor(currentModel?.inputTypes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -213,12 +226,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       <div className={styles.functionRow}>
         {/* 深度思考 / 智能搜索 / 模型 / 人设，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
+          <Tooltip
+            content={
+              reasoningAvailable ? t('deactivatedThinkTooltip') : t('thinkingUnavailableTooltip')
+            }
+          >
             <button
               type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
+              className={clsx(styles.toggle, thinking && reasoningAvailable && styles.selected)}
               aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
+              aria-pressed={thinking && reasoningAvailable}
+              // 模型没开启推理等级时不可用：打开也不会有效果
+              disabled={!reasoningAvailable}
               onClick={() => setThinking(!thinking)}
             >
               <IconThinkOutline14 />

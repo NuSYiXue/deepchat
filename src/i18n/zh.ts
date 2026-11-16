@@ -1,4 +1,12 @@
 export const zh = {
+  settingsBuiltinCannotDelete: '内置端点不可删除',
+  settingsTagBuiltin: '内置',
+  thinkingUnavailableTooltip: '当前模型未开启推理等级',
+  settingsReasoningOffHint: '关闭后该模型不支持推理，聊天窗口的「深度思考」将置灰',
+  settingsReasoningHint: '打开后，聊天窗口的「深度思考」才可用',
+  settingsDefaultModelHint: '新对话默认使用该模型',
+  settingsSetDefaultModel: '设为默认模型',
+  settingsIsDefaultModel: '当前默认模型',
   settingsReasoningAdd: '添加档位',
   settingsReasoningOffValue: '关闭思考，无需填写',
   settingsReasoningValue: 'API 参数值',

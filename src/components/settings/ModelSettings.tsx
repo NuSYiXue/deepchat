@@ -112,6 +112,9 @@ export const ModelSettings = () => {
               <div className={styles.rowHead}>
                 <span className={styles.rowIdentity}>
                   <span className={styles.rowName}>{endpoint.name}</span>
+                  {endpoint.builtin ? (
+                    <span className={styles.rowTag}>{t('settingsTagBuiltin')}</span>
+                  ) : null}
                   <span
                     className={clsx(
                       styles.credentialDot,
@@ -140,7 +143,8 @@ export const ModelSettings = () => {
                   <button
                     type="button"
                     className={styles.dangerButton}
-                    disabled={busy}
+                    disabled={busy || endpoint.builtin}
+                    title={endpoint.builtin ? t('settingsBuiltinCannotDelete') : undefined}
                     onClick={() => void run(() => deleteEndpoint(endpoint.id))}
                   >
                     {t('delete')}
@@ -521,14 +525,21 @@ const ModelFields = ({
 
       <ReasoningEditor value={value} onChange={onChange} />
 
-      <label className={styles.checkboxItem}>
-        <input
-          type="checkbox"
-          checked={value.isDefault}
-          onChange={(e) => onChange({ ...value, isDefault: e.target.checked })}
-        />
-        {t('settingsDefault')}
-      </label>
+      {/* 默认模型是全局唯一的：用一个明确的按钮表达，而不是一个可勾选的框 */}
+      <div className={styles.defaultRow}>
+        {value.isDefault ? (
+          <span className={styles.defaultBadge}>{t('settingsIsDefaultModel')}</span>
+        ) : (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => onChange({ ...value, isDefault: true })}
+          >
+            {t('settingsSetDefaultModel')}
+          </button>
+        )}
+        <span className={styles.reasoningHint}>{t('settingsDefaultModelHint')}</span>
+      </div>
 
       <EditorFooter
         busy={busy}
@@ -656,23 +667,20 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </label>
 )
 
-/** 打开推理等级时默认给出的四个档位 */
-const INITIAL_LEVELS = ['off', 'low', 'medium', 'high'] as const
+/** 推理等级打开时使用的默认档位 */
+const DEFAULT_LEVEL = 'medium'
 
-/** off 不发送参数值，其余档位默认用档位名作为参数值 */
-const defaultValue = (level: string): string | null => (level === 'off' ? null : level)
+/** 可选档位（不含 off：关掉开关就是关闭推理） */
+const THINKING_LEVELS = REASONING_LEVELS.filter((level) => level !== 'off')
 
 /**
- * 推理档位编辑，结构照 DeepSeekRuntime：
+ * 推理等级：开关 + 一个档位下拉。
  *
- *   推理等级            [开关]
- *   档位        API 参数值
- *   [low  ⌄]    [low       ]  🗑
- *   [high ⌄]    [high      ]  🗑
- *   + 添加档位
+ * 与 DeepSeekRuntime 的 reasoningEfforts 语义一致，但简化为单档位：这里配的是
+ * 「该模型允许的推理强度」，聊天窗口的「深度思考」只有在这里开启时才可用。
+ * 关闭开关等价于声明该模型不推理，此时主页的深度思考按钮置灰。
  *
- * 档位是给用户看的名字，API 参数值是真正发给上游的字段值（如 OpenAI 的
- * reasoning_effort 取值），默认与档位名相同。off 表示关闭思考，不需要参数值。
+ * 存储仍是「档位 → API 参数值」字典，只保留一项且值等于档位名。
  */
 const ReasoningEditor = ({
   value,
@@ -684,58 +692,14 @@ const ReasoningEditor = ({
   const t = useTranslate()
   const entries = Object.entries(value.reasoning ?? {})
   const enabled = entries.length > 0
-  /** 正在输入、尚未提交到 model 的文本，避免清空时立刻重置为档位名 */
-  const [typing, setTyping] = useState<{ level: string; text: string } | undefined>(undefined)
-  const used = entries.map(([level]) => level)
+  /** 当前生效的档位：字典里唯一的键 */
+  const current = entries[0]?.[0] ?? DEFAULT_LEVEL
 
-  const write = (next: [string, string | null][]) =>
-    onChange({ ...value, reasoning: Object.fromEntries(next) })
-
-  const toggle = (on: boolean) => {
-    if (!on) {
-      onChange({ ...value, reasoning: {} })
-      return
-    }
-    write(INITIAL_LEVELS.map((level) => [level, defaultValue(level)]))
+  const setEnabled = (on: boolean) => {
+    onChange({ ...value, reasoning: on ? { [DEFAULT_LEVEL]: DEFAULT_LEVEL } : {} })
   }
-
-  /** 可选的档位：已用的不能重复选，当前行的档位保留在列表里 */
-  const choicesFor = (level: string): string[] => [
-    ...(REASONING_LEVELS.includes(level as (typeof REASONING_LEVELS)[number]) ? [] : [level]),
-    ...REASONING_LEVELS.filter((choice) => choice === level || !used.includes(choice)),
-  ]
-
-  const changeLevel = (index: number, from: string, to: string) => {
-    const wire = entries[index][1]
-    // 自定义参数值只在两个思考档位之间保留；切到或切离 off 时重置
-    const carried =
-      typeof wire === 'string' && wire.length > 0 && wire !== from && from !== 'off' && to !== 'off'
-    const next = entries.map((entry, at) =>
-      at === index ? ([to, carried ? wire : defaultValue(to)] as [string, string | null]) : entry
-    )
-    write(next)
-  }
-
-  const changeValue = (index: number, level: string, text: string) => {
-    setTyping({ level, text })
-    const trimmed = text.trim()
-    const next = entries.map((entry, at) =>
-      at === index
-        ? ([level, trimmed.length === 0 ? defaultValue(level) : trimmed] as [string, string | null])
-        : entry
-    )
-    write(next)
-  }
-
-  const addLevel = () => {
-    const highest = Math.max(-1, ...used.map((level) => REASONING_LEVELS.indexOf(level as never)))
-    const next =
-      REASONING_LEVELS.find((candidate, index) => index > highest && !used.includes(candidate)) ??
-      REASONING_LEVELS.find((candidate) => !used.includes(candidate))
-    if (next === undefined) {
-      return
-    }
-    write([...entries, [next, defaultValue(next)]])
+  const setLevel = (level: string) => {
+    onChange({ ...value, reasoning: { [level]: level } })
   }
 
   return (
@@ -743,12 +707,12 @@ const ReasoningEditor = ({
       <div className={styles.reasoningHead}>
         <span className={styles.fieldLabel}>{t('settingsReasoning')}</span>
         <button
-          type="button"
-          role="switch"
+          type='button'
+          role='switch'
           aria-checked={enabled}
           aria-label={t('settingsReasoning')}
           className={clsx(styles.switch, enabled && styles.switchOn)}
-          onClick={() => toggle(!enabled)}
+          onClick={() => setEnabled(!enabled)}
         >
           <span className={styles.switchKnob} />
         </button>
@@ -756,61 +720,23 @@ const ReasoningEditor = ({
 
       {enabled ? (
         <>
-          {entries.length > 0 ? (
-            <div className={styles.reasoningRow} aria-hidden="true">
-              <span className={styles.fieldLabel}>{t('settingsReasoningLevel')}</span>
-              <span className={styles.fieldLabel}>{t('settingsReasoningValue')}</span>
-            </div>
-          ) : null}
-
-          {entries.map(([level, wire], index) => (
-            // 行以位置为身份：改档位是原地编辑，行本身不持有状态
-            <div key={index} className={styles.reasoningRow}>
-              <select
-                className={styles.levelSelect}
-                value={level}
-                aria-label={t('settingsReasoningLevel')}
-                onChange={(e) => changeLevel(index, level, e.target.value)}
-              >
-                {choicesFor(level).map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
-              <input
-                className={styles.reasoningValueInput}
-                type="text"
-                value={typing?.level === level ? typing.text : typeof wire === 'string' ? wire : ''}
-                placeholder={level === 'off' ? t('settingsReasoningOffValue') : level}
-                aria-label={`${level} ${t('settingsReasoningValue')}`}
-                // off 只是关闭思考，不需要参数值
-                disabled={level === 'off'}
-                onChange={(e) => changeValue(index, level, e.target.value)}
-                onBlur={() => setTyping(undefined)}
-              />
-              <button
-                type="button"
-                className={clsx(styles.iconButton, styles.iconButtonDanger)}
-                aria-label={`${t('delete')} ${level}`}
-                title={t('delete')}
-                onClick={() => write(entries.filter((_entry, at) => at !== index))}
-              >
-                <IconTrashOutline16 />
-              </button>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            className={styles.addLevelButton}
-            disabled={REASONING_LEVELS.every((level) => used.includes(level))}
-            onClick={addLevel}
+          <select
+            className={styles.levelSelect}
+            value={current}
+            aria-label={t('settingsReasoningLevel')}
+            onChange={(e) => setLevel(e.target.value)}
           >
-            {t('settingsReasoningAdd')}
-          </button>
+            {THINKING_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+          <p className={styles.reasoningHint}>{t('settingsReasoningHint')}</p>
         </>
-      ) : null}
+      ) : (
+        <p className={styles.reasoningHint}>{t('settingsReasoningOffHint')}</p>
+      )}
     </div>
   )
 }

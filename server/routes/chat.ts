@@ -204,15 +204,24 @@ export const buildUpstreamBody = (
   if (typeof body.system === 'string' && body.system !== '') {
     payload.system = body.system
   }
-  // 模型声明了推理档位时按档位生成参数；没有声明则沿用前端的深度思考开关
-  const reasoningFields = buildReasoning(efforts, dialect, body.reasoningLevel)
-  if (reasoningFields.thinking !== undefined) {
-    payload.thinking = reasoningFields.thinking
-  } else if (body.thinking) {
-    payload.thinking = body.thinking
-  }
-  if (reasoningFields.reasoning_effort !== undefined) {
-    payload.reasoning_effort = reasoningFields.reasoning_effort
+  // 推理由两层决定：
+  // - 模型配置声明了档位（设置 → 模型 → 推理等级）才具备推理能力；
+  // - 本轮是否真的推理，由聊天窗口的「深度思考」开关决定。
+  // 两者都满足才发送推理参数。
+  const wantsThinking = body.thinking?.type === 'enabled'
+  if (wantsThinking) {
+    const reasoningFields = buildReasoning(efforts, dialect, body.reasoningLevel)
+    if (reasoningFields.thinking !== undefined) {
+      payload.thinking = reasoningFields.thinking
+    } else if (reasoningFields.reasoning_effort !== undefined) {
+      payload.reasoning_effort = reasoningFields.reasoning_effort
+    } else {
+      // 模型没声明档位时，至少按开关发一个基础 thinking
+      payload.thinking = body.thinking ?? { type: 'enabled' }
+    }
+  } else {
+    // 明确关闭，避免上游按自己的默认开启思考
+    payload.thinking = { type: 'disabled' }
   }
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     payload.tools = body.tools

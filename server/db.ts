@@ -58,7 +58,9 @@ create table if not exists endpoints (
   origin       text not null,
   api_key      text not null default '',
   dialect      text not null default 'deepseek',
-  capabilities text not null default '{}'
+  capabilities text not null default '{}',
+  -- 1 表示内置端点（DeepSeek 官方），不允许删除
+  builtin      integer not null default 0
 );
 
 create table if not exists models (
@@ -127,10 +129,28 @@ export const openDatabase = (dataDir: string): DatabaseSync => {
   mkdirSync(dataDir, { recursive: true })
   const db = new DatabaseSync(path.join(dataDir, 'app.db'))
   db.exec(SCHEMA)
+  migrate(db)
   db.prepare(
     `insert or ignore into personas (id, name, prompt, builtin, position) values (?, ?, ?, 1, 0)`
   ).run(DEFAULT_PERSONA_ID, '默认', DEFAULT_PERSONA_PROMPT)
   return db
+}
+
+/** 已有列清单，用于判断是否需要补列 */
+const columnsOf = (db: DatabaseSync, table: string): Set<string> =>
+  new Set((db.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name))
+
+/**
+ * 增量迁移：只补列，不重建表。
+ *
+ * schema 用 `create table if not exists`，老库不会因为新增列而自动更新，
+ * 因此这里显式补齐；已存在的列跳过。
+ */
+const migrate = (db: DatabaseSync): void => {
+  const endpoints = columnsOf(db, 'endpoints')
+  if (!endpoints.has('builtin')) {
+    db.exec(`alter table endpoints add column builtin integer not null default 0`)
+  }
 }
 
 export type SeedConfig = {
@@ -148,50 +168,54 @@ export type SeedConfig = {
  * 因此重启服务不会把 Key 重置回环境变量里的值。
  */
 export const seedEndpoints = (db: DatabaseSync, seed: SeedConfig): void => {
-  const existing = db.prepare(`select count(*) as count from endpoints`).get() as { count: number }
-  if (existing.count > 0) {
-    return
-  }
-  const apiKey = seed.deepseekApiKey?.trim()
-  if (!apiKey) {
-    return
-  }
-  const origin = seed.apiOrigin?.trim() || 'https://api.deepseek.com'
-  const model = seed.apiModel?.trim() || 'deepseek-flash'
-  const isOfficial = origin === 'https://api.deepseek.com'
+  const apiKey = seed.deepseekApiKey?.trim() ?? ''
 
-  transaction(db, () => {
+  // 官方 DeepSeek 端点始终保留：没有它，「深度思考」回落与语音都没有归属。
+  // 已有 endpoints 行时只补官方端点，不动用户自己的配置。
+  const hasOfficial = db
+    .prepare(`select count(*) as count from endpoints where builtin = 1`)
+    .get() as { count: number }
+  if (hasOfficial.count === 0) {
+    const origin = seed.apiOrigin?.trim() || 'https://api.deepseek.com'
+    const model = seed.apiModel?.trim() || 'deepseek-flash'
+    const official = origin === 'https://api.deepseek.com'
+    transaction(db, () => {
+      db.prepare(
+        `insert or ignore into endpoints (id, name, origin, api_key, dialect, capabilities, builtin)
+         values ('default', 'DeepSeek', ?, ?, 'deepseek', ?, 1)`
+      ).run(
+        origin,
+        apiKey,
+        JSON.stringify({
+          latestReminder: official,
+          safetyCheck: official,
+          titleExtension: official,
+          filesApi: official,
+        })
+      )
+      db.prepare(
+        `insert or ignore into models
+           (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position)
+         values ('default', 'default', ?, ?, ?, 64000, 8192, '{}', ?, 0)`
+      ).run(
+        model,
+        model,
+        JSON.stringify(['text', 'image', 'document']),
+        // 只有一个模型时让它当默认，避免首次启动没有可用模型
+        (db.prepare(`select count(*) as count from models`).get() as { count: number }).count === 0
+          ? 1
+          : 0
+      )
+    })
+    return
+  }
+
+  // 已有官方端点：只在 Key 为空且本次提供了 Key 时补上，不覆盖用户后来改过的值
+  if (apiKey !== '') {
     db.prepare(
-      `insert into endpoints (id, name, origin, api_key, dialect, capabilities)
-       values (?, ?, ?, ?, ?, ?)`
-    ).run(
-      'default',
-      isOfficial ? 'DeepSeek' : '自定义端点',
-      origin,
-      apiKey,
-      'deepseek',
-      JSON.stringify({
-        latestReminder: isOfficial,
-        safetyCheck: isOfficial,
-        titleExtension: isOfficial,
-        filesApi: isOfficial,
-      })
-    )
-    db.prepare(
-      `insert into models
-         (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position)
-       values (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`
-    ).run(
-      'default',
-      'default',
-      model,
-      model,
-      JSON.stringify(['text', 'image', 'document']),
-      64000,
-      8192,
-      JSON.stringify({ kind: 'none' })
-    )
-  })
+      `update endpoints set api_key = ? where builtin = 1 and (api_key is null or api_key = '')`
+    ).run(apiKey)
+  }
 }
 
 /** 单次事务；失败时回滚并重新抛出 */

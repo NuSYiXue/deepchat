@@ -23,6 +23,8 @@ export type Endpoint = {
   capabilities: Record<string, boolean>
   hasKey: boolean
   keyHint: string | null
+  /** 内置的 DeepSeek 官方端点；不可删除 */
+  builtin: boolean
 }
 
 /**
@@ -80,9 +82,11 @@ export const reloadConfig = async (): Promise<void> => {
 export const personaById = (id: string | undefined): Persona | undefined =>
   useConfig.getState().personas.find((item) => item.id === (id ?? DEFAULT_PERSONA_ID))
 
-/** 会话未指定模型时用默认模型 */
-export const resolveModel = (id: string | null | undefined): ModelConfig | undefined => {
-  const { models } = useConfig.getState()
+/** 从给定列表里解析模型：优先按 id，其次默认模型，最后第一项 */
+export const resolveModelFrom = (
+  models: ModelConfig[],
+  id: string | null | undefined
+): ModelConfig | undefined => {
   if (id) {
     const found = models.find((item) => item.id === id)
     if (found) {
@@ -91,6 +95,10 @@ export const resolveModel = (id: string | null | undefined): ModelConfig | undef
   }
   return models.find((item) => item.isDefault) ?? models[0]
 }
+
+/** 会话未指定模型时用默认模型；读当前 store 快照 */
+export const resolveModel = (id: string | null | undefined): ModelConfig | undefined =>
+  resolveModelFrom(useConfig.getState().models, id)
 
 export const endpointById = (id: string): Endpoint | undefined =>
   useConfig.getState().endpoints.find((item) => item.id === id)

@@ -23,6 +23,7 @@ type EndpointRow = {
   api_key: string
   dialect: string
   capabilities: string
+  builtin: number
 }
 
 const keyHint = (key: string): string =>
@@ -36,6 +37,7 @@ const presentEndpoint = (row: EndpointRow) => ({
   capabilities: JSON.parse(row.capabilities) as Record<string, unknown>,
   hasKey: row.api_key !== '',
   keyHint: row.api_key === '' ? null : keyHint(row.api_key),
+  builtin: row.builtin === 1,
 })
 
 const upsertEndpoint = (
@@ -204,6 +206,12 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
    * 会话重置回默认，否则会话会指向已不存在的配置。
    */
   deleteEndpoint: (id: string) => {
+    const target = db.prepare(`select builtin from endpoints where id = ?`).get(id) as
+      | { builtin: number }
+      | undefined
+    if (target?.builtin === 1) {
+      throw new HttpError(400, 'the built-in DeepSeek endpoint cannot be deleted')
+    }
     transaction(db, () => {
       const models = db.prepare(`select id from models where endpoint_id = ?`).all(id) as {
         id: string

@@ -1,6 +1,14 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsBuiltinCannotDelete: 'The built-in endpoint cannot be removed',
+  settingsTagBuiltin: 'Built-in',
+  thinkingUnavailableTooltip: 'Reasoning is disabled for this model',
+  settingsReasoningOffHint: 'This model cannot reason; the DeepThink toggle stays disabled',
+  settingsReasoningHint: 'Enables the DeepThink toggle in the chat input',
+  settingsDefaultModelHint: 'New chats use this model',
+  settingsSetDefaultModel: 'Set as default',
+  settingsIsDefaultModel: 'Default model',
   settingsReasoningAdd: 'Add level',
   settingsReasoningOffValue: 'Turns reasoning off',
   settingsReasoningValue: 'API value',
