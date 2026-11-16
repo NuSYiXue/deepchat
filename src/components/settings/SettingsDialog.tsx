@@ -34,6 +34,7 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { ModelSettings } from './ModelSettings.js'
+import { PersonaSettings } from './PersonaSettings.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import { useAuth } from '../../services/server/authState.js'
 import styles from './Settings.module.css'
@@ -54,6 +55,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     icon: <IconSettingsOutline16 />,
   },
   { value: 'models', label: 'settingDialogAsideModelsOptionLabel', icon: <IconDataOutline16 /> },
+  {
+    value: 'personas',
+    label: 'settingDialogAsidePersonasOptionLabel',
+    icon: <IconDataOutline16 />,
+  },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
 
@@ -107,6 +113,8 @@ const SettingsContent = () => {
             </>
           ) : section === 'models' ? (
             <ModelSettings />
+          ) : section === 'personas' ? (
+            <PersonaSettings />
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />

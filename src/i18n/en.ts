@@ -1,6 +1,14 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsPersonas: 'Personas',
+  settingsPersonaNew: 'New persona',
+  settingsPersonaEdit: 'Edit persona',
+  settingsPersonaId: 'Persona ID (unique)',
+  settingsPersonaName: 'Display name',
+  settingsPersonaPrompt: 'System prompt',
+  settingsAddPersona: 'Add persona',
+  settingsBuiltin: 'built-in',
   uploadTypeNotSupported: 'The current model does not accept this file type: {name}',
   settingsEndpoints: 'Endpoints',
   settingsEndpointNew: 'Endpoint',
@@ -128,6 +136,7 @@ export const en = {
   settingsLocationRegion: 'Select country or region',
   settingDialogAsideGeneralOptionLabel: 'General',
   settingDialogAsideModelsOptionLabel: 'Models',
+  settingDialogAsidePersonasOptionLabel: 'Personas',
   settingDialogAsideDataOptionLabel: 'Data',
   avatarMenuSettingsDialogThemeItemLabel: 'Theme',
   avatarMenuSettingsDialogThemeSelectLightOption: 'Light',
