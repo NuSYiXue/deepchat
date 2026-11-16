@@ -62,6 +62,20 @@ const referencedFileIds = (session: StoredSession): string[] => {
 const filePath = (filesDir: string, id: string) => path.join(filesDir, id)
 
 export const sessionRoutes = ({ db, filesDir }: Deps) => {
+  /** 全库仍被引用的附件 id：删除会话后据此判断哪些原件成了孤儿 */
+  const collectReferencedFileIds = (): string[] => {
+    const ids = new Set<string>()
+    for (const summary of listSessionSummaries(db)) {
+      const session = loadSession(db, summary.id)
+      if (session) {
+        for (const id of referencedFileIds(session as StoredSession)) {
+          ids.add(id)
+        }
+      }
+    }
+    return [...ids]
+  }
+
   const pruneUnreferenced = (keepIds: string[]): void => {
     const rows = db.prepare(`select id from files`).all() as { id: string }[]
     const keep = new Set(keepIds)
@@ -116,11 +130,14 @@ export const sessionRoutes = ({ db, filesDir }: Deps) => {
 
   remove: (id: string) => {
     deleteSession(db, id)
+    pruneUnreferenced(collectReferencedFileIds())
     return { ok: true }
   },
 
+  /** 清空全部会话，同时删除所有附件原件 */
   clear: () => {
     clearSessions(db)
+    pruneUnreferenced([])
     return { ok: true }
   },
 

@@ -191,17 +191,21 @@ export const updateStagingFileTypes = async (types: ReadonlyMap<string, string>)
 }
 
 /**
- * 导入完成后提交：把暂存区的会话与原件全部推到服务端。
+ * 导入完成后提交：清空服务端旧数据，再写入暂存区的会话与原件。
  *
- * 服务端的「替换」语义由调用方保证——replaceHistory 会先清空再写入，
- * 这里只负责逐条搬运，并在成功后清空暂存。
+ * 与原版 IndexedDB 实现的 `commitStaging` 语义一致——导入是「替换」而不是
+ * 「合并」，否则旧会话会残留在列表里。清空放在最前，因为后续任一步失败时
+ * 调用方会清空暂存并报错，让用户重试，不会留下半套数据。
  */
 export const commitStaging = async (): Promise<SessionSummary[]> => {
   const db = await getDB()
   const files = await db.getAll('filesStaging')
+  const sessions = await db.getAll('sessionsStaging')
+
+  // 先清空：服务端会同时删除全部会话与消息；附件原件由会话引用关系驱动清理
+  await clearAllSessions()
   await saveFiles(files)
 
-  const sessions = await db.getAll('sessionsStaging')
   const summaries: SessionSummary[] = []
   for (const session of sessions) {
     await sendJson(`/api/sessions/${encodeURIComponent(session.id)}`, 'PUT', session)
