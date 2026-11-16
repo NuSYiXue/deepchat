@@ -63,9 +63,28 @@ const upsertEndpoint = (
   const dialect =
     body.dialect === 'anthropic' || body.dialect === 'openai' ? body.dialect : 'deepseek'
   const capabilities = JSON.stringify(body.capabilities ?? {})
-  const current = db.prepare(`select api_key from endpoints where id = ?`).get(body.id) as
-    | { api_key: string }
+  const current = db
+    .prepare(`select api_key, builtin, name, origin, dialect, capabilities from endpoints where id = ?`)
+    .get(body.id) as
+    | {
+        api_key: string
+        builtin: number
+        name: string
+        origin: string
+        dialect: string
+        capabilities: string
+      }
     | undefined
+
+  // 内置端点只允许改 API Key：其余字段一律沿用已保存值，避免被接口改坏
+  if (current?.builtin === 1) {
+    db.prepare(`update endpoints set api_key = ? where id = ?`).run(
+      typeof body.apiKey === 'string' ? body.apiKey : current.api_key,
+      body.id
+    )
+    return body.id
+  }
+
   // apiKey 缺省表示「保持不变」，空字符串才是清空
   const apiKey =
     typeof body.apiKey === 'string' ? body.apiKey : (current?.api_key ?? '')
@@ -92,6 +111,13 @@ const upsertModel = (
   }
   if (typeof body.model !== 'string' || body.model === '') {
     throw new HttpError(400, 'model is required')
+  }
+  // 内置端点的模型由程序固定，不接受新增或修改
+  const owner = db
+    .prepare(`select builtin from endpoints where id = ?`)
+    .get(body.endpointId) as { builtin: number } | undefined
+  if (owner?.builtin === 1) {
+    throw new HttpError(400, 'models of the built-in endpoint are fixed')
   }
   db.prepare(
     `insert into models
@@ -194,6 +220,17 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
   },
 
   deleteModel: (id: string) => {
+    // 内置端点的模型由程序固定，不接受删除
+    const owner = db
+      .prepare(
+        `select e.builtin as builtin from models m
+         join endpoints e on e.id = m.endpoint_id
+         where m.id = ?`
+      )
+      .get(id) as { builtin: number } | undefined
+    if (owner?.builtin === 1) {
+      throw new HttpError(400, 'models of the built-in endpoint are fixed')
+    }
     db.prepare(`delete from models where id = ?`).run(id)
     db.prepare(`update sessions set model_id = null where model_id = ?`).run(id)
     return { ok: true }

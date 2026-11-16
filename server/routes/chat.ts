@@ -234,7 +234,8 @@ export const buildUpstreamBody = (
   if (body.title && capabilities.titleExtension) {
     payload.title = body.title
   }
-  if (typeof body.max_tokens === 'number') {
+  // 内置端点与原版一致：不发送 max_tokens，由上游决定输出长度
+  if (!builtin && typeof body.max_tokens === 'number') {
     payload.max_tokens = body.max_tokens
   }
   return payload
@@ -313,16 +314,25 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       }
 
       const capabilities = capabilitiesFor(endpoint)
+      const builtin = endpoint.builtin === 1
 
-      // 按模型窗口裁剪历史；输出预算从窗口里预留，避免请求本身超限
-      const outputBudget = body.max_tokens ?? maxOutput ?? 0
-      if (maxContext && maxContext > 0) {
-        const trimmed = trimMessages(
-          body.messages as { role: string; content?: unknown }[],
-          maxContext,
-          outputBudget
-        )
-        body.messages = trimmed.messages
+      /**
+       * 内置端点的请求体与原版逐字段一致，不额外注入任何字段。
+       *
+       * 原版不发送 max_tokens，也不做客户端上下文裁剪——窗口由上游自己判定。
+       * 这两项只对自定义端点生效，否则官方端点的行为会与改造前不同。
+       */
+      if (!builtin) {
+        // 按模型窗口裁剪历史；输出预算从窗口里预留，避免请求本身超限
+        const outputBudget = body.max_tokens ?? maxOutput ?? 0
+        if (maxContext && maxContext > 0) {
+          const trimmed = trimMessages(
+            body.messages as { role: string; content?: unknown }[],
+            maxContext,
+            outputBudget
+          )
+          body.messages = trimmed.messages
+        }
       }
 
       // 搜索回落：模型端点自己没有原生搜索能力时，先借用支持搜索的端点查一次，
@@ -338,12 +348,15 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       }
 
       const reasoning = modelConfig
-      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect, endpoint.builtin === 1, reasoning)
+      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect, builtin, reasoning)
       // 前端传的 model 是模型 id 或上游模型名；以配置表里的为准
       upstreamBody.model = model
-      // 输出上限：请求没指定时用模型配置值
-      if (typeof upstreamBody.max_tokens !== 'number' && maxOutput) {
+      // 输出上限以模型配置为准；配置未填时保留请求里带来的值
+      if (!builtin && maxOutput) {
         upstreamBody.max_tokens = maxOutput
+      } else if (builtin) {
+        // 内置端点与原版一致：不发送 max_tokens
+        delete upstreamBody.max_tokens
       }
 
       const base = endpoint.origin.replace(/\/+$/, '')

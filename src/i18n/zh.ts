@@ -1,4 +1,5 @@
 export const zh = {
+  settingsBuiltinDeepSeek: 'DeepSeek 官方',
   settingsAvailableModels: '可用模型',
   settingsFetchModelsEmpty: '端点没有返回模型列表，请手动填写',
   settingsFetchingModels: '获取中...',

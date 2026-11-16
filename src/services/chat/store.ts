@@ -5,7 +5,8 @@ import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
-import { DEFAULT_PERSONA_ID, personaById, resolveModel } from '../server/config.js'
+import { DEFAULT_PERSONA_ID, personaById, resolveModel, useConfig } from '../server/config.js'
+import type { ModelConfig } from '../server/config.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import {
@@ -48,6 +49,21 @@ const resolveSystemPrompt = (session: Session | undefined): string => {
   const persona = personaById(session?.personaId)
   const prompt = persona?.prompt?.trim()
   return prompt && prompt !== '' ? prompt : SYSTEM_PROMPT
+}
+
+/**
+ * 模型是否属于内置的 DeepSeek 官方端点。
+ *
+ * 内置端点的请求体要与原版保持一致（不发 max_tokens、不做客户端裁剪），
+ * 因此调用方需要先区分它和自定义端点。
+ */
+const isBuiltinModel = (model: ModelConfig | undefined): boolean => {
+  if (!model) {
+    return false
+  }
+  return useConfig.getState().endpoints.some(
+    (endpoint) => endpoint.id === model.endpointId && endpoint.builtin
+  )
 }
 
 /**
@@ -1067,7 +1083,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             // 搜索开关也告诉服务端：端点不支持原生搜索时由它借用搜索服务
             ...(initial.search ? { search: true } : {}),
             ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-            ...(modelConfig?.maxOutput ? { max_tokens: modelConfig.maxOutput } : {}),
+            // 输出上限只对自定义端点有意义；内置端点与原版一致，不传 max_tokens。
+            // 服务端最终以模型配置为准，这里传值只是让自定义端点有默认值可用。
+            ...(!isBuiltinModel(modelConfig) && modelConfig?.maxOutput
+              ? { max_tokens: modelConfig.maxOutput }
+              : {}),
           },
           controller.signal,
           modelConfig?.id

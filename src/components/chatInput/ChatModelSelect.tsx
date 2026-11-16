@@ -17,15 +17,26 @@ import styles from './ChatInput.module.css'
 export const ChatModelSelect = ({ sessionId }: { sessionId: string | null }) => {
   const t = useTranslate()
   const models = useConfig((state) => state.models)
+  const endpoints = useConfig((state) => state.endpoints)
   const pending = usePendingSelection((state) => state.modelId)
   const session = useChatStore((state) =>
     sessionId !== null ? state.sessionCache[sessionId] : undefined
   )
 
-  const options = useMemo<SelectOption<string>[]>(
-    () => models.map((model) => ({ value: model.id, label: model.name || model.model })),
-    [models]
-  )
+  /**
+   * 内置端点的模型不做单独选择：它的模型由程序固定，与原版一致，
+   * 下拉里直接显示为「DeepSeek 官方」。自定义端点的模型按名称列出。
+   */
+  const options = useMemo<SelectOption<string>[]>(() => {
+    const builtinEndpointIds = new Set(
+      endpoints.filter((endpoint) => endpoint.builtin).map((endpoint) => endpoint.id)
+    )
+    return models.map((model) =>
+      builtinEndpointIds.has(model.endpointId)
+        ? { value: model.id, label: t('settingsBuiltinDeepSeek') }
+        : { value: model.id, label: model.name || model.model }
+    )
+  }, [models, endpoints, t])
   // 新对话用待创建的选择，已有会话看会话自身
   const current = sessionId === null
     ? (resolveModel(pending)?.id ?? '')

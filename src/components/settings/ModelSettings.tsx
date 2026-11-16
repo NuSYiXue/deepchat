@@ -361,7 +361,9 @@ const ProviderEditor = ({
         }
       />
 
-      {endpoint ? (
+      {/* 内置端点的模型由程序固定，不展示列表；聊天窗口的选择器里直接
+          显示为「DeepSeek 官方」。这里只在自定义端点下渲染模型管理。 */}
+      {endpoint && !builtin ? (
         <div className={styles.models}>
           <div className={styles.modelsHead}>
             <span className={styles.editorTitle}>{t('settingsModels')}</span>
@@ -373,7 +375,11 @@ const ProviderEditor = ({
           {models.map((model) => {
             const expanded = modelDraft?.id === model.id && !isNew(model.id)
             return (
-              <div key={model.id} className={styles.modelEntry} data-expanded={expanded ? '' : undefined}>
+              <div
+                key={model.id}
+                className={styles.modelEntry}
+                data-expanded={expanded ? '' : undefined}
+              >
                 <div className={styles.modelRow}>
                   <input
                     className={styles.modelIdInput}
@@ -382,40 +388,30 @@ const ProviderEditor = ({
                     aria-label={t('settingsModelUpstream')}
                     title={model.model}
                   />
-                  {/* 内置端点的模型与原版一致：只展示，不可展开编辑或删除 */}
-                  {builtin ? (
-                    <>
-                      <span />
-                      <span />
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className={styles.iconButton}
-                        aria-label={t('settingsModelAdvanced')}
-                        aria-expanded={expanded}
-                        title={t('settingsModelAdvanced')}
-                        onClick={() =>
-                          setModelDraft((current) => (current?.id === model.id ? null : model))
-                        }
-                      >
-                        <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
-                          <IconChevronDownOutline14 />
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className={clsx(styles.iconButton, styles.iconButtonDanger)}
-                        aria-label={`${t('delete')} ${model.model}`}
-                        title={t('delete')}
-                        disabled={busy || model.isDefault}
-                        onClick={() => void run(() => deleteModel(model.id))}
-                      >
-                        <IconTrashOutline16 />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    aria-label={t('settingsModelAdvanced')}
+                    aria-expanded={expanded}
+                    title={t('settingsModelAdvanced')}
+                    onClick={() =>
+                      setModelDraft((current) => (current?.id === model.id ? null : model))
+                    }
+                  >
+                    <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
+                      <IconChevronDownOutline14 />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={clsx(styles.iconButton, styles.iconButtonDanger)}
+                    aria-label={`${t('delete')} ${model.model}`}
+                    title={t('delete')}
+                    disabled={busy || model.isDefault}
+                    onClick={() => void run(() => deleteModel(model.id))}
+                  >
+                    <IconTrashOutline16 />
+                  </button>
                   <input
                     className={styles.modelNameInput}
                     value={model.name}
@@ -428,7 +424,7 @@ const ProviderEditor = ({
                 {expanded && modelDraft ? (
                   <ModelFields
                     value={modelDraft}
-                    builtin={builtin}
+                    builtin={false}
                     busy={busy}
                     onChange={setModelDraft}
                     onCancel={() => setModelDraft(null)}
@@ -451,7 +447,7 @@ const ProviderEditor = ({
               </div>
               <ModelFields
                 value={modelDraft}
-                builtin={builtin}
+                builtin={false}
                 busy={busy}
                 onChange={setModelDraft}
                 onCancel={() => setModelDraft(null)}
@@ -465,18 +461,16 @@ const ProviderEditor = ({
             </div>
           ) : null}
 
-          {builtin ? null : (
-            <div className={styles.addModelActions}>
-              <button
-                type="button"
-                className={styles.addModelButton}
-                disabled={busy || modelDraft !== null}
-                onClick={() => setModelDraft(emptyModel(endpoint.id))}
-              >
-                {t('settingsAddModel')}
-              </button>
-            </div>
-          )}
+          <div className={styles.addModelActions}>
+            <button
+              type="button"
+              className={styles.addModelButton}
+              disabled={busy || modelDraft !== null}
+              onClick={() => setModelDraft(emptyModel(endpoint.id))}
+            >
+              {t('settingsAddModel')}
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

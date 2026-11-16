@@ -1,6 +1,7 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsBuiltinDeepSeek: 'DeepSeek official',
   settingsAvailableModels: 'Available models',
   settingsFetchModelsEmpty: 'The endpoint returned no models; enter one manually',
   settingsFetchingModels: 'Fetching…',
