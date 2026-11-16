@@ -10,6 +10,22 @@ import { Readable } from 'node:stream'
 /** 请求体上限；附件上限 64MB，留出 multipart 编码的余量 */
 export const MAX_BODY_BYTES = 72 * 1024 * 1024
 
+/**
+ * 检查字符串里是否含 Unicode 替换字符（U+FFFD）。
+ *
+ * 客户端若把非 UTF-8 文本（例如被按 GBK 编码的中文）当 UTF-8 发送，
+ * 解码后就会得到 U+FFFD。这类数据一旦入库会永久显示为乱码，且无法自动还原，
+ * 所以在写入前直接拒绝，让调用方看到明确错误。
+ */
+export const hasReplacementChar = (value: string): boolean => value.includes('\uFFFD')
+
+/** 校验用户可见文本；含替换字符时抛 400 */
+export const assertCleanText = (value: string, field: string): void => {
+  if (hasReplacementChar(value)) {
+    throw new HttpError(400, `${field} contains invalid UTF-8 (U+FFFD); check the client encoding`)
+  }
+}
+
 const aborted = Symbol('aborted')
 
 /** 把 IncomingMessage 转成 Web Request；客户端断开时中止请求信号 */

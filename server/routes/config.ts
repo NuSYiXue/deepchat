@@ -5,7 +5,7 @@
  * 避免密钥随 GET 响应进入浏览器缓存或前端 DevTools 历史。
  */
 import type { DatabaseSync } from 'node:sqlite'
-import { HttpError, readJson } from '../http.ts'
+import { HttpError, assertCleanText, readJson } from '../http.ts'
 import {
   DEFAULT_PERSONA_ID,
   listEndpoints,
@@ -131,6 +131,8 @@ const upsertPersona = (db: DatabaseSync, body: Record<string, unknown>): string 
   if (typeof body.name !== 'string' || typeof body.prompt !== 'string') {
     throw new HttpError(400, 'name and prompt are required')
   }
+  assertCleanText(body.name, 'name')
+  assertCleanText(body.prompt, 'prompt')
   db.prepare(
     `insert into personas (id, name, prompt, builtin, position) values (?, ?, ?, 0, ?)
      on conflict(id) do update set name = excluded.name, prompt = excluded.prompt, position = excluded.position`

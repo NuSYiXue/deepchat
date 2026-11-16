@@ -9,7 +9,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import type { DatabaseSync } from 'node:sqlite'
-import { HttpError, noContent, readJson } from '../http.ts'
+import { HttpError, assertCleanText, noContent, readJson } from '../http.ts'
 import {
   clearSessions,
   deleteSession,
@@ -109,6 +109,7 @@ export const sessionRoutes = ({ db, filesDir }: Deps) => {
     if (typeof body.title !== 'string') {
       throw new HttpError(400, 'title must be a string')
     }
+    assertCleanText(body.title, 'title')
     renameSession(db, id, body.title)
     return { ok: true }
   },
