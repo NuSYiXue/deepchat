@@ -9,3 +9,5 @@ build/
 .env.*
 !.env.example
 tmp/
+# 服务端运行时数据：数据库、附件原件、Cookie 签名密钥
+data/

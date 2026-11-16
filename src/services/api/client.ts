@@ -9,12 +9,14 @@ import type {
   MessageStreamEvent,
 } from './types.js'
 
-/** 构建期 API 地址，默认 https://api.deepseek.com；本地开发支持开发服务器代理 */
-export const API_ORIGIN = __API_ORIGIN__
-/** Anthropic 兼容接口的前缀 */
-const ANTHROPIC_BASE_URL = `${API_ORIGIN}/anthropic/v1`
-/** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
-const FILES_BETA = 'files-api-2025-04-14'
+/**
+ * 前端不再直接访问上游 API，全部经自建服务转发：
+ * - API Key 不进入前端产物；
+ * - 浏览器与上游之间没有 CORS 约束；
+ * - 陌生端点的私有字段可以在服务端裁剪。
+ */
+const CHAT_ENDPOINT = '/api/chat'
+const UPLOAD_ENDPOINT = '/api/upload'
 
 export type ApiErrorKind =
   /** 非 2xx 响应 */
@@ -69,7 +71,16 @@ const readErrorResponse = async (
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
   let response: Response
   try {
-    response = await fetch(url, init)
+    response = await fetch(url, {
+      ...init,
+      // 会话 Cookie 是同源 HttpOnly，必须带上
+      credentials: 'same-origin',
+      headers: {
+        // 服务端用它拒绝跨站表单提交
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    })
   } catch (error) {
     if (init.signal?.aborted) {
       throw error
@@ -82,78 +93,63 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => ({
-  // DeepSeek 兼容接口的鉴权方式，也可使用 Authorization: Bearer。
-  'x-api-key': apiKey,
-  // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
-  ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
-})
-
-/** 用 GET /models 校验 API Key（不产生费用） */
-export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {
-  await request(`${API_ORIGIN}/models`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${apiKey}` },
+/** 用服务端的端点自检接口验证配置（不产生费用） */
+export const verifyApiKey = async (endpointId: string, signal?: AbortSignal): Promise<void> => {
+  await request('/api/config/test-endpoint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpointId }),
     signal,
   })
 }
 
 /**
- * POST /anthropic/v1/files 上传附件（不设过期时间，会话里的历史附件一直可用）。
+ * 上传附件到上游 Files API，经自建服务转发。
  * purpose 为 null 时不传该字段（图片）；purpose 必须排在 file 之前。
  */
 export const uploadFile = async (
-  apiKey: string,
   file: File,
   purpose: FilePurpose | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  modelId?: string
 ): Promise<FileObject> => {
   const form = new FormData()
   if (purpose) {
     form.append('purpose', purpose)
   }
   form.append('file', file)
-  const response = await request(`${ANTHROPIC_BASE_URL}/files`, {
+  const query = modelId ? `?modelId=${encodeURIComponent(modelId)}` : ''
+  const response = await request(`${UPLOAD_ENDPOINT}${query}`, {
     method: 'POST',
-    headers: anthropicHeaders(apiKey, true),
     body: form,
     signal,
   })
   return (await response.json()) as FileObject
 }
 
-/** DELETE /anthropic/v1/files/{file_id} */
-export const deleteFile = async (apiKey: string, fileId: string): Promise<void> => {
-  await request(`${ANTHROPIC_BASE_URL}/files/${encodeURIComponent(fileId)}`, {
-    method: 'DELETE',
-    headers: anthropicHeaders(apiKey, true),
-  })
+/** 删除上游文件；服务端可能不支持，调用方自行忽略失败 */
+export const deleteFile = async (fileId: string): Promise<void> => {
+  await request(`/api/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 }
 
-const hasFile = (body: CreateMessageRequest) =>
-  body.messages.some(
-    (message) =>
-      typeof message.content !== 'string' &&
-      message.content.some((block) => block.type === 'image' || block.type === 'document')
-  )
-
 /**
- * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
+ * POST /api/chat（stream: true），逐个产出流式事件，收到 message_stop 时结束。
+ * 服务端把上游 SSE 原样回吐，因此解析逻辑与直连时一致。
  * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
  */
 export async function* streamMessage(
-  apiKey: string,
   body: CreateMessageRequest,
-  signal: AbortSignal
+  signal: AbortSignal,
+  modelId?: string
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
+  const query = modelId ? `?modelId=${encodeURIComponent(modelId)}` : ''
+  const response = await request(`${CHAT_ENDPOINT}${query}`, {
     method: 'POST',
     headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({ ...body, stream: true }),
+    body: JSON.stringify(body),
     signal,
   })
   const contentType = response.headers.get('Content-Type') ?? ''

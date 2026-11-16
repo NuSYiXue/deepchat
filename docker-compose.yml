@@ -1,0 +1,18 @@
+services:
+  chat-demo:
+    build: .
+    image: chat-demo:server
+    container_name: chat-demo
+    restart: unless-stopped
+    # 内网直连用；公网经 NPM 反代到同一端口，因此这里必须监听全部接口
+    ports:
+      - "3000:3000"
+    environment:
+      # 访问密码：必填，建议 20 位以上随机串
+      APP_PASSWORD: "${APP_PASSWORD:?APP_PASSWORD is required}"
+      DATA_DIR: /data
+      PORT: "3000"
+      TZ: Asia/Shanghai
+    volumes:
+      # SQLite 数据库、附件原件、签名密钥都在这里；备份只需拷这个目录
+      - ./data:/data

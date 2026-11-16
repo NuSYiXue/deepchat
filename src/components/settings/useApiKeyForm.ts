@@ -1,46 +1,36 @@
 import { useState } from 'react'
-import { ApiError, verifyApiKey } from '../../services/api/client.js'
-import { classifyApiError } from '../../services/api/errors.js'
-import { setApiKey } from '../../services/settings.js'
+import { login } from '../../services/server/http.js'
 import { useTranslate } from '../../i18n/index.js'
 
-/** 输入 API Key 后先用 GET /models 校验，通过才保存 */
-export const useApiKeyForm = (onSaved?: () => void) => {
+/**
+ * 服务访问密码输入。
+ *
+ * 服务端化之后，API Key 由服务端保管，浏览器只需要一道门的密码。
+ * 密码通过 POST /api/auth 换取 HttpOnly Cookie，成功后由外层触发重新加载。
+ */
+export const useAccessForm = (onSaved?: () => void) => {
   const t = useTranslate()
   const [value, setValue] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const [failure, setFailure] = useState<{ cause: unknown } | null>(null)
-  const cause = failure?.cause
-  const error =
-    failure === null
-      ? null
-      : classifyApiError(cause) === 'unauthorized'
-        ? t('apiKeyInvalid')
-        : classifyApiError(cause) === 'network'
-          ? t('commonNetworkErrorToast')
-          : t('apiKeyVerificationFailed', {
-              message:
-                cause instanceof ApiError && cause.localMessage
-                  ? t(cause.localMessage.key, cause.localMessage.params)
-                  : cause instanceof Error
-                    ? cause.message
-                    : String(cause),
-            })
+  const [failed, setFailed] = useState(false)
+
+  const error = failed ? t('accessPasswordInvalid') : null
 
   const submit = async () => {
-    const apiKey = value.trim()
-    if (!apiKey || verifying) {
+    const password = value.trim()
+    if (!password || verifying) {
       return
     }
     setVerifying(true)
-    setFailure(null)
+    setFailed(false)
     try {
-      await verifyApiKey(apiKey)
-      setApiKey(apiKey)
+      const ok = await login(password)
+      if (!ok) {
+        setFailed(true)
+        return
+      }
       setValue('')
       onSaved?.()
-    } catch (e) {
-      setFailure({ cause: e })
     } finally {
       setVerifying(false)
     }
