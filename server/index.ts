@@ -155,9 +155,16 @@ router.post('/api/config/settings', async ({ req }) => json(await config.putSett
 
 const serveStatic = createStaticHandler(DIST_DIR)
 
+/**
+ * 认证只作用于 /api/：页面本身（含登录界面）必须能加载，否则未登录用户
+ * 只会看到一段 JSON，无法进入应用。
+ */
 const handle = async (req: Request): Promise<Response> => {
   const url = new URL(req.url)
-  if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth')) {
+  if (!url.pathname.startsWith('/api/')) {
+    return serveStatic(url)
+  }
+  if (url.pathname.startsWith('/api/auth')) {
     return routeApi(req, url)
   }
   if (!auth.authenticated(req.headers.get('cookie'), Date.now())) {
@@ -194,7 +201,16 @@ const server = http.createServer((nodeReq, nodeRes: ServerResponse) => {
         return
       }
       if (error instanceof HttpError) {
-        await sendResponse(nodeRes, json({ error: error.message }, error.status))
+        // 上游的响应体原样透传：前端按自己的协议解析（含 error.message），
+        // 再包一层字符串会让它变成无法识别的双重 JSON。
+        const response =
+          error.body !== undefined && error.body !== ''
+            ? new Response(error.body, {
+                status: error.status,
+                headers: { 'content-type': 'application/json; charset=utf-8' },
+              })
+            : json({ error: error.message }, error.status)
+        await sendResponse(nodeRes, response)
         return
       }
       process.stderr.write(`[error] ${String(error)}\n`)

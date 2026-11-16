@@ -137,13 +137,21 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     return row
   }
 
-  /** 找到某个 model 所属的端点；未指定时取默认模型 */
+  /**
+   * 找到模型配置；未指定时取默认模型。
+   *
+   * 入参同时接受配置表主键和上游模型名：前端历史消息里存的是模型名
+   * （如 deepseek-flash），会话首次生成时还没有配置主键可传。
+   */
   const resolveEndpoint = (modelId: string | undefined): { endpoint: EndpointRow; model: string } => {
+    const selectById = db.prepare(`select * from models where id = ?`)
+    const selectByName = db.prepare(`select * from models where model = ? order by is_default desc limit 1`)
+    const selectDefault = db.prepare(`select * from models order by is_default desc, position limit 1`)
+
     const row = (
       modelId
-        ? db.prepare(`select * from models where id = ?`).get(modelId)
-        : (db.prepare(`select * from models order by is_default desc, position limit 1`).get() ??
-          undefined)
+        ? ((selectById.get(modelId) ?? selectByName.get(modelId)) as unknown)
+        : (selectDefault.get() ?? undefined)
     ) as { endpoint_id: string; model: string } | undefined
     if (!row) {
       throw new HttpError(400, 'no model configured')
@@ -192,7 +200,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
 
       if (!upstream.ok) {
         const detail = await upstream.text().catch(() => '')
-        throw new HttpError(upstream.status, detail || upstream.statusText)
+        throw new HttpError(upstream.status, detail || upstream.statusText, detail)
       }
 
       const contentType = upstream.headers.get('content-type') ?? ''
@@ -238,7 +246,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
 
       if (!upstream.ok) {
         const detail = await upstream.text().catch(() => '')
-        throw new HttpError(upstream.status, detail || upstream.statusText)
+        throw new HttpError(upstream.status, detail || upstream.statusText, detail)
       }
       const result = (await upstream.json()) as { id?: string }
       if (typeof result.id !== 'string') {

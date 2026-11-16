@@ -34,6 +34,7 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { useAuth } from '../../services/server/authState.js'
 import styles from './Settings.module.css'
 
 /**
@@ -65,6 +66,7 @@ const SettingsContent = () => {
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
   const historyBusy = historyImport.busy || historyDelete.busy || replacingHistory
+  const authenticated = useAuth((state) => state.authenticated === true)
   return (
     <>
       <Modal
@@ -104,23 +106,28 @@ const SettingsContent = () => {
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />
-              <ImportHistory historyImport={historyImport} disabled={historyBusy} />
-              <ExportHistory disabled={historyBusy} />
-              <SettingCell
-                label={t('deleteAllSessions')}
-                status={null}
-                action={
-                  <Button
-                    variant="dangerOutlined"
-                    size="m"
-                    className={styles.cellButton}
-                    disabled={historyBusy}
-                    onClick={historyDelete.open}
-                  >
-                    {t('delete')}
-                  </Button>
-                }
-              />
+              {/* 未登录时导入/导出/删除都会拿到 401，不如直接隐藏，避免点了才报错 */}
+              {authenticated ? (
+                <>
+                  <ImportHistory historyImport={historyImport} disabled={historyBusy} />
+                  <ExportHistory disabled={historyBusy} />
+                  <SettingCell
+                    label={t('deleteAllSessions')}
+                    status={null}
+                    action={
+                      <Button
+                        variant="dangerOutlined"
+                        size="m"
+                        className={styles.cellButton}
+                        disabled={historyBusy}
+                        onClick={historyDelete.open}
+                      >
+                        {t('delete')}
+                      </Button>
+                    }
+                  />
+                </>
+              ) : null}
               {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>
           )}

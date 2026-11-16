@@ -66,11 +66,14 @@ export const sendResponse = async (res: ServerResponse, response: Response): Pro
 
 export class HttpError extends Error {
   readonly status: number
+  /** 上游返回的原始响应体；有值时原样透传，避免把上游 JSON 再包一层字符串 */
+  readonly body: string | undefined
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body?: string) {
     super(message)
     this.name = 'HttpError'
     this.status = status
+    this.body = body
   }
 }
 
