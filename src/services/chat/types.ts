@@ -114,6 +114,15 @@ export type Session = {
   messages: Message[]
   /** undefined 表示线性消息列表；null 表示空会话。 */
   rootMessageId?: string | null
+  /**
+   * 会话使用的人设；缺省为内置默认人设。
+   *
+   * 绑在会话而非消息上：system 是整条 messages 的前缀，协议上无法按轮次分段，
+   * 因此人设只能在整个会话内保持一致。
+   */
+  personaId?: string
+  /** 会话使用的模型配置 id；缺省时用全局默认模型 */
+  modelId?: string | null
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */

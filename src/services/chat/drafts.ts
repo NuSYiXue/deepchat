@@ -23,6 +23,23 @@ type Draft = { text: string; attachments: DraftAttachment[] }
 
 export const EMPTY_DRAFT: Draft = { text: '', attachments: [] }
 
+/**
+ * 新对话的待创建选择：会话要等首条消息才会创建，但用户希望在输入框里就先
+ * 选好模型与人设。这里先记住选择，创建会话时再落到 Session 上。
+ */
+export const usePendingSelection = create<{
+  personaId: string | null
+  modelId: string | null
+}>(
+  () => ({ personaId: null, modelId: null })
+)
+
+export const setPendingPersona = (personaId: string | null) =>
+  usePendingSelection.setState({ personaId })
+
+export const setPendingModel = (modelId: string | null) =>
+  usePendingSelection.setState({ modelId })
+
 /** 草稿只保存在本次页面的内存中，独立于会话详情缓存；null 是新对话的草稿。 */
 export const useDrafts = create<{ drafts: Map<string | null, Draft> }>(() => ({
   drafts: new Map(),

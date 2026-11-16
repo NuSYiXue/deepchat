@@ -5,6 +5,7 @@ import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
+import { DEFAULT_PERSONA_ID, personaById, resolveModel } from '../server/config.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import {
@@ -13,6 +14,7 @@ import {
   clearSentDraft,
   getDraft,
   prepareDraftMessage,
+  usePendingSelection,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
 import {
@@ -34,8 +36,18 @@ import {
 
 /** deepseek-flash 同时支持深度思考与图片输入 */
 const MODEL: ChatModel = 'deepseek-flash'
-/** 所有生成请求统一携带的助手身份说明 */
+/**
+ * 内置默认人设的 system prompt，与「设置 → 人设」里的默认项一致。
+ * 会话未指定人设、或人设被删除时回落到这里。
+ */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
+
+/** 解析会话使用的人设 prompt；找不到时回落到默认文案 */
+const resolveSystemPrompt = (session: Session | undefined): string => {
+  const persona = personaById(session?.personaId)
+  const prompt = persona?.prompt?.trim()
+  return prompt && prompt !== '' ? prompt : SYSTEM_PROMPT
+}
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 安全审核固定开启，所有请求都走扩展模式 */
@@ -478,6 +490,32 @@ export const renameSession = (id: string, title: string) => {
 }
 
 /**
+ * 切换会话人设。
+ *
+ * 只允许在空会话上切换：system 是整条 messages 的前缀，中途更换会让历史
+ * 全部消息在新人设下被重新解读，而协议上无法把旧轮次固定回旧人设。
+ * UI 侧据此把非空会话的切换入口置灰。
+ */
+export const setSessionPersona = (id: string, personaId: string): boolean => {
+  const session = getSession(id)
+  if (!session || session.messages.length > 0 || get().importingHistory) {
+    return false
+  }
+  updateSession(id, (current) => ({ ...current, personaId }))
+  persist(id)
+  return true
+}
+
+/** 切换会话模型；不限制会话是否已有消息，因为每条回复都记录了当时的模型快照 */
+export const setSessionModel = (id: string, modelId: string | null): void => {
+  if (get().importingHistory || !getSession(id)) {
+    return
+  }
+  updateSession(id, (session) => ({ ...session, modelId }))
+  persist(id)
+}
+
+/**
  * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
  * 同一服务端文件可能被多个会话引用，不维护引用计数。
  */
@@ -563,6 +601,8 @@ export const sendMessage = (targetSessionId: string | null) => {
     return false
   }
   if (sessionId === null) {
+    // 新对话期间用户可能已在输入框里选好模型与人设，创建会话时带上
+    const pending = usePendingSelection.getState()
     const session: Session = {
       id: createId(),
       title: '',
@@ -570,7 +610,11 @@ export const sendMessage = (targetSessionId: string | null) => {
       updatedAt: now,
       messages: [],
       rootMessageId: null,
+      personaId: pending.personaId ?? DEFAULT_PERSONA_ID,
+      modelId: pending.modelId,
     }
+    // 选择已经落到会话上，清掉待创建状态，避免影响下一个新对话
+    usePendingSelection.setState({ personaId: null, modelId: null })
     sessionId = session.id
     touchSession(session.id)
     set((state) => ({
@@ -995,18 +1039,26 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           initial.thinking ?? false,
           latestReminder
         )
+        // 人设与模型都取自会话：人设固定在整个会话内，模型允许中途更换，
+        // 但每条回复都会记录当时用的模型快照（AssistantMessage.model）。
+        const sessionForRequest = getSession(sessionId)
+        const modelConfig = resolveModel(sessionForRequest?.modelId)
+        const modelName = modelConfig?.model ?? initial.model ?? MODEL
         const events = streamMessage(
           {
-            model: initial.model ?? MODEL,
-            system: SYSTEM_PROMPT,
+            model: modelName,
+            system: resolveSystemPrompt(sessionForRequest),
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
             tools: serverTools(initial.search ?? false),
+            // 搜索开关也告诉服务端：端点不支持原生搜索时由它借用搜索服务
+            ...(initial.search ? { search: true } : {}),
             ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+            ...(modelConfig?.maxOutput ? { max_tokens: modelConfig.maxOutput } : {}),
           },
           controller.signal,
-          initial.model ?? undefined
+          modelConfig?.id
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {

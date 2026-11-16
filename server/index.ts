@@ -17,6 +17,7 @@ import { createStaticHandler } from './static.ts'
 import { chatRoutes } from './routes/chat.ts'
 import { configRoutes } from './routes/config.ts'
 import { sessionRoutes } from './routes/sessions.ts'
+import { formatHits, relaySearch } from './search.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..')
@@ -138,6 +139,16 @@ router.post('/api/config/test-endpoint', async ({ req }) => {
     throw new HttpError(400, 'endpointId is required')
   }
   return json(await chat.verify(body.endpointId))
+})
+
+// ---- 搜索（方案 B：借用支持搜索的端点） ----
+router.post('/api/search', async ({ req }) => {
+  const body = (await req.json()) as { query?: unknown }
+  if (typeof body.query !== 'string' || body.query.trim() === '') {
+    throw new HttpError(400, 'query is required')
+  }
+  const hits = await relaySearch(db, body.query, req.signal)
+  return json({ hits, text: formatHits(hits) })
 })
 
 // ---- 语音 ----

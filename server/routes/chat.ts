@@ -6,6 +6,9 @@
  */
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError, readJson } from '../http.ts'
+import { toOpenAIBody, translateOpenAIStream } from './openai.ts'
+import { trimMessages } from '../context.ts'
+import { formatHits, relaySearch } from '../search.ts'
 
 export type EndpointRow = {
   id: string
@@ -23,6 +26,13 @@ export type Capabilities = {
   thinkingLevel: boolean
   nativeWebSearch: boolean
   filesApi: boolean
+}
+
+/** 模型配置里的推理方式 */
+export type ModelReasoning = {
+  kind?: 'none' | 'budget' | 'effort'
+  levels?: { label: string; value: string | number }[]
+  defaultLevel?: string | number
 }
 
 const DEFAULT_CAPABILITIES: Capabilities = {
@@ -62,14 +72,75 @@ export type ChatRequestBody = {
   system?: string
   messages: unknown[]
   thinking?: { type: 'enabled' | 'disabled' }
+  /** 推理等级的显式取值；缺省时用模型配置的 defaultLevel */
+  reasoningLevel?: string | number
+  /** 本轮是否开启联网搜索；端点不支持原生搜索时由服务端借用搜索服务 */
+  search?: boolean
+  /** 搜索用的查询词；缺省时取最后一条用户消息 */
+  searchQuery?: string
   tools?: unknown[]
   safety_check?: { level: string }
   title?: { enabled: boolean }
   max_tokens?: number
 }
 
-const assertChatBody = (value: unknown): ChatRequestBody => {
-  if (typeof value !== 'object' || value === null) {
+/** 取最后一条用户消息的纯文本，作为搜索查询词 */
+const lastUserText = (messages: unknown[]): string => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i] as Record<string, unknown>
+    if (message.role !== 'user') {
+      continue
+    }
+    const content = message.content
+    if (typeof content === 'string') {
+      return content
+    }
+    if (Array.isArray(content)) {
+      const text = content
+        .filter(
+          (block): block is { text: string } =>
+            typeof block === 'object' &&
+            block !== null &&
+            typeof (block as { text?: unknown }).text === 'string'
+        )
+        .map((block) => block.text)
+        .join('\n')
+      if (text.trim() !== '') {
+        return text
+      }
+    }
+  }
+  return ''
+}
+
+/**
+ * 把搜索结果作为前置文本块注入最后一条用户消息。
+ *
+ * 不加新消息：多一条 user 会破坏「user/assistant 交替」的假设，
+ * 也会让历史轮次统计多出一轮。
+ */
+const injectSearchContext = (messages: unknown[], text: string): unknown[] => {
+  const result = [...messages]
+  for (let i = result.length - 1; i >= 0; i--) {
+    const message = result[i] as Record<string, unknown>
+    if (message.role !== 'user') {
+      continue
+    }
+    const content = message.content
+    const prepend = { type: 'text', text: `${text}\n\n---\n\n` }
+    result[i] = {
+      ...message,
+      content:
+        typeof content === 'string'
+          ? [prepend, { type: 'text', text: content }]
+          : [prepend, ...(Array.isArray(content) ? content : [])],
+    }
+    break
+  }
+  return result
+}
+
+const assertChatBody = (value: unknown): ChatRequestBody => {  if (typeof value !== 'object' || value === null) {
     throw new HttpError(400, 'request body must be an object')
   }
   const body = value as Record<string, unknown>
@@ -86,25 +157,69 @@ const assertChatBody = (value: unknown): ChatRequestBody => {
  * 按端点能力裁剪请求体。
  * 不支持的字段整块省略，避免陌生端点因未知字段返回 400。
  */
+/**
+ * 按模型配置生成推理参数。
+ *
+ * 三种约定：
+ * - budget：Anthropic 风格，thinking.budget_tokens；
+ * - effort：OpenAI 风格，reasoning_effort；
+ * - none：不发任何推理字段。
+ *
+ * 等级值来自模型配置；请求未指定时用 defaultLevel。
+ */
+const buildReasoning = (
+  reasoning: { kind?: string; defaultLevel?: string | number } | undefined,
+  level: string | number | undefined
+): { thinking?: unknown; reasoning_effort?: unknown } => {
+  if (!reasoning || reasoning.kind === 'none' || reasoning.kind === undefined) {
+    return {}
+  }
+  const value = level ?? reasoning.defaultLevel
+  if (value === undefined) {
+    return {}
+  }
+  if (reasoning.kind === 'budget') {
+    const budget = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(budget) && budget > 0
+      ? { thinking: { type: 'enabled', budget_tokens: budget } }
+      : {}
+  }
+  if (reasoning.kind === 'effort') {
+    return { reasoning_effort: value }
+  }
+  return {}
+}
+
+/**
+ * 组装上游请求体。
+ *
+ * 不支持的字段整块省略，避免陌生端点因未知字段返回 400。
+ */
 export const buildUpstreamBody = (
   body: ChatRequestBody,
   capabilities: Capabilities,
-  dialect: string
+  reasoning?: { kind?: string; defaultLevel?: string | number }
 ): Record<string, unknown> => {
-  const payload: Record<string, unknown> = {
-    model: body.model,
-    messages: capabilities.latestReminder
-      ? body.messages
-      : (body.messages as Record<string, unknown>[]).filter(
-          (message) => message.role !== 'latest_reminder'
-        ),
-  }
+  const messages = capabilities.latestReminder
+    ? body.messages
+    : (body.messages as Record<string, unknown>[]).filter(
+        (message) => message.role !== 'latest_reminder'
+      )
+
+  const payload: Record<string, unknown> = { model: body.model, messages }
 
   if (typeof body.system === 'string' && body.system !== '') {
     payload.system = body.system
   }
-  if (body.thinking) {
+  // 模型配置声明的推理方式优先；没有配置时沿用前端的开关
+  const reasoningFields = buildReasoning(reasoning, body.reasoningLevel)
+  if (reasoningFields.thinking !== undefined) {
+    payload.thinking = reasoningFields.thinking
+  } else if (body.thinking) {
     payload.thinking = body.thinking
+  }
+  if (reasoningFields.reasoning_effort !== undefined) {
+    payload.reasoning_effort = reasoningFields.reasoning_effort
   }
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     payload.tools = body.tools
@@ -117,11 +232,6 @@ export const buildUpstreamBody = (
   }
   if (typeof body.max_tokens === 'number') {
     payload.max_tokens = body.max_tokens
-  }
-
-  // OpenAI 方言的 system 走 messages 首条，这里是占位，P7 再接翻译层
-  if (dialect === 'openai') {
-    throw new HttpError(501, `dialect "${dialect}" is not implemented yet`)
   }
   return payload
 }
@@ -143,7 +253,15 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
    * 入参同时接受配置表主键和上游模型名：前端历史消息里存的是模型名
    * （如 deepseek-flash），会话首次生成时还没有配置主键可传。
    */
-  const resolveEndpoint = (modelId: string | undefined): { endpoint: EndpointRow; model: string } => {
+  const resolveEndpoint = (
+    modelId: string | undefined
+  ): {
+    endpoint: EndpointRow
+    model: string
+    reasoning?: ModelReasoning
+    maxContext?: number
+    maxOutput?: number
+  } => {
     const selectById = db.prepare(`select * from models where id = ?`)
     const selectByName = db.prepare(`select * from models where model = ? order by is_default desc limit 1`)
     const selectDefault = db.prepare(`select * from models order by is_default desc, position limit 1`)
@@ -152,47 +270,108 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       modelId
         ? ((selectById.get(modelId) ?? selectByName.get(modelId)) as unknown)
         : (selectDefault.get() ?? undefined)
-    ) as { endpoint_id: string; model: string } | undefined
+    ) as
+      | { endpoint_id: string; model: string; reasoning?: string; max_context?: number; max_output?: number }
+      | undefined
     if (!row) {
       throw new HttpError(400, 'no model configured')
     }
-    return { endpoint: findEndpoint(row.endpoint_id), model: row.model }
+    let reasoning: ModelReasoning | undefined
+    if (typeof row.reasoning === 'string') {
+      try {
+        reasoning = JSON.parse(row.reasoning) as ModelReasoning
+      } catch {
+        // 配置损坏时按不支持推理处理
+      }
+    }
+    return {
+      endpoint: findEndpoint(row.endpoint_id),
+      model: row.model,
+      reasoning,
+      maxContext: typeof row.max_context === 'number' ? row.max_context : undefined,
+      maxOutput: typeof row.max_output === 'number' ? row.max_output : undefined,
+    }
   }
 
   return {
     /** POST /api/chat：转发并原样回吐 SSE */
     proxy: async (req: Request, modelId: string | undefined): Promise<Response> => {
       const body = assertChatBody(await readJson(req))
-      const { endpoint, model } = resolveEndpoint(modelId)
+      const {
+        endpoint,
+        model,
+        reasoning: modelConfig,
+        maxContext,
+        maxOutput,
+      } = resolveEndpoint(modelId)
       if (!endpoint.api_key) {
         throw new HttpError(400, `endpoint "${endpoint.name}" has no API key`)
       }
 
       const capabilities = capabilitiesFor(endpoint)
-      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect)
+
+      // 按模型窗口裁剪历史；输出预算从窗口里预留，避免请求本身超限
+      const outputBudget = body.max_tokens ?? maxOutput ?? 0
+      if (maxContext && maxContext > 0) {
+        const trimmed = trimMessages(
+          body.messages as { role: string; content?: unknown }[],
+          maxContext,
+          outputBudget
+        )
+        body.messages = trimmed.messages
+      }
+
+      // 搜索回落：模型端点自己没有原生搜索能力时，先借用支持搜索的端点查一次，
+      // 把结果作为文本注入本轮提问。回答仍由当前模型给出。
+      if (body.search && !capabilities.nativeWebSearch) {
+        const query = body.searchQuery ?? lastUserText(body.messages)
+        if (query) {
+          const hits = await relaySearch(db, query, req.signal).catch(() => [])
+          if (hits.length > 0) {
+            body.messages = injectSearchContext(body.messages, formatHits(hits))
+          }
+        }
+      }
+
+      const reasoning = modelConfig
+      const upstreamBody = buildUpstreamBody(body, capabilities, reasoning)
       // 前端传的 model 是模型 id 或上游模型名；以配置表里的为准
       upstreamBody.model = model
+      // 输出上限：请求没指定时用模型配置值
+      if (typeof upstreamBody.max_tokens !== 'number' && maxOutput) {
+        upstreamBody.max_tokens = maxOutput
+      }
 
       const base = endpoint.origin.replace(/\/+$/, '')
-      const target =
-        endpoint.dialect === 'deepseek' || endpoint.dialect === 'anthropic'
-          ? `${base}/anthropic/v1/messages`
-          : `${base}/v1/chat/completions`
+      const isOpenAI = endpoint.dialect === 'openai'
+      const target = isOpenAI
+        ? `${base}/v1/chat/completions`
+        : `${base}/anthropic/v1/messages`
 
-      const headers: Record<string, string> = {
-        'content-type': 'application/json',
-        accept: 'text/event-stream',
-        'x-api-key': endpoint.api_key,
-        authorization: `Bearer ${endpoint.api_key}`,
-      }
+      const headers: Record<string, string> = isOpenAI
+        ? {
+            'content-type': 'application/json',
+            accept: 'text/event-stream',
+            authorization: `Bearer ${endpoint.api_key}`,
+          }
+        : {
+            'content-type': 'application/json',
+            accept: 'text/event-stream',
+            'x-api-key': endpoint.api_key,
+            authorization: `Bearer ${endpoint.api_key}`,
+          }
       if (capabilities.filesApi) {
         headers['anthropic-beta'] = 'files-api-2025-04-14'
       }
 
+      const requestBody = isOpenAI
+        ? toOpenAIBody(body, upstreamBody)
+        : { ...upstreamBody, stream: true }
+
       const upstream = await fetch(target, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...upstreamBody, stream: true }),
+        body: JSON.stringify(requestBody),
         signal: req.signal,
       }).catch((error: unknown) => {
         throw new HttpError(502, `upstream request failed: ${String(error)}`)
@@ -209,7 +388,13 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         throw new HttpError(502, `upstream did not return SSE: ${text.slice(0, 200)}`)
       }
 
-      return new Response(upstream.body, {
+      // OpenAI 方言的 SSE 结构完全不同，翻译成 Anthropic 事件后再回吐，
+      // 前端的解析器与 UI 因此不需要知道上游是谁。
+      const stream = isOpenAI
+        ? translateOpenAIStream(upstream.body as ReadableStream<Uint8Array>, model)
+        : upstream.body
+
+      return new Response(stream, {
         status: 200,
         headers: {
           'content-type': 'text/event-stream; charset=utf-8',

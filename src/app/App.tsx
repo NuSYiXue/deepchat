@@ -20,6 +20,7 @@ import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { initAuth } from '../services/server/authState.js'
+import { loadConfig } from '../services/server/config.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
@@ -76,6 +77,8 @@ export const App = () => {
         openSettings('data')
         return
       }
+      // 人设与模型列表要先就绪，新建会话才知道用哪个默认值
+      await loadConfig().catch(() => {})
       await initChat()
       ensureApiKey()
     })()

@@ -4,7 +4,13 @@
  * 声明 deepseek_web_search / deepseek_read_url 或设置 safety_check.level 为 high 时进入扩展模式。
  */
 
-export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro'
+/**
+ * 模型标识。
+ *
+ * 不再是固定字面量联合：端点与模型由用户在设置里配置，名称由上游决定。
+ * 历史消息里存的模型名（如 deepseek-flash）仍然是合法值。
+ */
+export type ChatModel = string
 
 // ---------- 响应：内容块 ----------
 
@@ -180,6 +186,14 @@ export type CreateMessageRequest = {
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
   safety_check: { level: 'high' }
   title?: { enabled: boolean }
+  /**
+   * 以下字段由自建服务消费，不会原样发给上游：
+   * - search：端点不支持原生搜索时，服务端借用搜索服务并注入结果；
+   * - max_tokens：输出上限，缺省时用模型配置值。
+   */
+  search?: boolean
+  searchQuery?: string
+  max_tokens?: number
 }
 
 // ---------- 响应：流式事件 ----------
