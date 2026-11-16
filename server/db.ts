@@ -133,6 +133,67 @@ export const openDatabase = (dataDir: string): DatabaseSync => {
   return db
 }
 
+export type SeedConfig = {
+  /** DeepSeek API Key；存在时自动创建官方端点与默认模型 */
+  deepseekApiKey?: string
+  /** 自定义端点；与 key 同时提供时作为默认模型 */
+  apiOrigin?: string
+  apiModel?: string
+}
+
+/**
+ * 首次启动时按环境变量播种端点与模型，让服务开箱即可对话。
+ *
+ * 只在完全没有端点时写入：已有配置（包括用户后来在设置里改过的）不会被覆盖，
+ * 因此重启服务不会把 Key 重置回环境变量里的值。
+ */
+export const seedEndpoints = (db: DatabaseSync, seed: SeedConfig): void => {
+  const existing = db.prepare(`select count(*) as count from endpoints`).get() as { count: number }
+  if (existing.count > 0) {
+    return
+  }
+  const apiKey = seed.deepseekApiKey?.trim()
+  if (!apiKey) {
+    return
+  }
+  const origin = seed.apiOrigin?.trim() || 'https://api.deepseek.com'
+  const model = seed.apiModel?.trim() || 'deepseek-flash'
+  const isOfficial = origin === 'https://api.deepseek.com'
+
+  transaction(db, () => {
+    db.prepare(
+      `insert into endpoints (id, name, origin, api_key, dialect, capabilities)
+       values (?, ?, ?, ?, ?, ?)`
+    ).run(
+      'default',
+      isOfficial ? 'DeepSeek' : '自定义端点',
+      origin,
+      apiKey,
+      'deepseek',
+      JSON.stringify({
+        latestReminder: isOfficial,
+        safetyCheck: isOfficial,
+        titleExtension: isOfficial,
+        filesApi: isOfficial,
+      })
+    )
+    db.prepare(
+      `insert into models
+         (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position)
+       values (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`
+    ).run(
+      'default',
+      'default',
+      model,
+      model,
+      JSON.stringify(['text', 'image', 'document']),
+      64000,
+      8192,
+      JSON.stringify({ kind: 'none' })
+    )
+  })
+}
+
 /** 单次事务；失败时回滚并重新抛出 */
 export const transaction = <T>(db: DatabaseSync, run: () => T): T => {
   db.exec('begin')

@@ -10,6 +10,10 @@ services:
     environment:
       # 访问密码：必填，建议 20 位以上随机串
       APP_PASSWORD: "${APP_PASSWORD:?APP_PASSWORD is required}"
+      # 首次启动创建默认端点；之后在设置里改过的配置不会被覆盖
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      API_ORIGIN: "${API_ORIGIN:-}"
+      API_MODEL: "${API_MODEL:-}"
       DATA_DIR: /data
       PORT: "3000"
       TZ: Asia/Shanghai

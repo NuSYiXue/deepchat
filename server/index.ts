@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ServerResponse } from 'node:http'
 import { createAuth, createSecret } from './auth.ts'
-import { openDatabase } from './db.ts'
+import { openDatabase, seedEndpoints } from './db.ts'
 import { HttpError, json, sendResponse, toRequest } from './http.ts'
 import { createRouter } from './router.ts'
 import { createStaticHandler } from './static.ts'
@@ -37,6 +37,11 @@ if (!existsSync(secretPath)) {
 }
 
 const db = openDatabase(DATA_DIR)
+seedEndpoints(db, {
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY,
+  apiOrigin: process.env.API_ORIGIN,
+  apiModel: process.env.API_MODEL,
+})
 const auth = createAuth({ password: PASSWORD, secret: readFileSync(secretPath, 'utf8').trim() })
 const sessions = sessionRoutes({ db, filesDir })
 const chat = chatRoutes({ db })
