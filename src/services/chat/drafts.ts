@@ -63,6 +63,22 @@ const updateDraft = (sessionId: string | null, update: (draft: Draft) => Draft) 
 export const setDraftText = (sessionId: string | null, text: string) =>
   updateDraft(sessionId, (draft) => ({ ...draft, text }))
 
+/**
+ * 当前生效的模型接受哪些输入类型。
+ *
+ * store 已经 import 本模块，这里反向引用会形成循环依赖，因此由 store 在
+ * 模块初始化时注册一个解析函数。未注册（例如纯单元测试）时不限制。
+ */
+type InputTypeResolver = (sessionId: string | null) => string[] | undefined
+let resolveInputTypes: InputTypeResolver | null = null
+
+export const registerInputTypeResolver = (resolver: InputTypeResolver) => {
+  resolveInputTypes = resolver
+}
+
+const currentInputTypes = (sessionId: string | null): string[] | undefined =>
+  resolveInputTypes?.(sessionId)
+
 const upload = (attachment: DraftAttachment) => {
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
   void uploadAttachment(
@@ -81,7 +97,11 @@ export const addDraftFiles = (
   if (files.length === 0) {
     return null
   }
-  const error = validateFiles(files, getDraft(sessionId).attachments.length)
+  const error = validateFiles(
+    files,
+    getDraft(sessionId).attachments.length,
+    currentInputTypes(sessionId)
+  )
   if (error) {
     return error
   }

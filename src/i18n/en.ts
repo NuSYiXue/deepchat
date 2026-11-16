@@ -1,6 +1,7 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  uploadTypeNotSupported: 'The current model does not accept this file type: {name}',
   settingsEndpoints: 'Endpoints',
   settingsEndpointNew: 'Endpoint',
   settingsEndpointId: 'Endpoint ID (unique)',

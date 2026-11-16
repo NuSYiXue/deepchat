@@ -26,12 +26,14 @@ import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
-import { ACCEPT, useUploads } from '../../services/attachments.js'
+import { acceptFor, useUploads } from '../../services/attachments.js'
 import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { ChatModelSelect, ChatPersonaSelect } from './ChatModelSelect.js'
+import { resolveModel } from '../../services/server/config.js'
+import { usePendingSelection } from '../../services/chat/drafts.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.css'
 
@@ -54,6 +56,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  // 当前模型的输入能力决定文件选择框的可选类型；缺省时不过滤
+  const sessionModelId = useChatStore((state) =>
+    sessionId !== null ? state.sessionCache[sessionId]?.modelId : undefined
+  )
+  const pendingModelId = usePendingSelection((state) => state.modelId)
+  const accept = acceptFor(
+    resolveModel(sessionId === null ? pendingModelId : sessionModelId)?.inputTypes
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -257,7 +267,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             type="file"
             multiple
             hidden
-            accept={ACCEPT}
+            accept={accept}
             onChange={(event) => {
               acceptFiles(Array.from(event.target.files ?? []))
               event.target.value = ''

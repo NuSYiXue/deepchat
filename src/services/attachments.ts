@@ -7,8 +7,36 @@ import { ACCEPT_FILE_EXTS } from './uploadExts.js'
 
 /** 允许上传的扩展名，按扩展名白名单过滤，清单见 uploadExts.ts */
 export const ACCEPTED_EXTS = ACCEPT_FILE_EXTS
-/** 选择文件对话框的过滤条件 */
+/** 扩展名 → 输入类别，用于按模型的 inputTypes 做前端门控 */
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'])
+const DOCUMENT_EXTS = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx'])
+
+/** 全部可上传扩展名的 accept 属性 */
 export const ACCEPT = ACCEPTED_EXTS.map((ext) => `.${ext}`).join(',')
+
+/**
+ * 按模型输入能力收窄 accept。
+ *
+ * 仍然保留 text 类扩展名（代码、表格等按文本处理），只剔除被明确排除的
+ * image / document 类；inputTypes 缺省时返回全部。
+ */
+export const acceptFor = (inputTypes?: string[]): string => {
+  if (!inputTypes || inputTypes.length === 0) {
+    return ACCEPT
+  }
+  const allowImage = inputTypes.includes('image')
+  const allowDocument = inputTypes.includes('document')
+  const exts = ACCEPTED_EXTS.filter((ext) => {
+    if (IMAGE_EXTS.has(ext)) {
+      return allowImage
+    }
+    if (DOCUMENT_EXTS.has(ext)) {
+      return allowDocument
+    }
+    return true
+  })
+  return exts.map((ext) => `.${ext}`).join(',')
+}
 /** 单文件大小上限与 Files API 一致 */
 export const MAX_SIZE_MB = 64
 /** 按 user_data 上传的文件（纯文本、代码、表格、电子书）原文件上限更小 */
@@ -42,10 +70,37 @@ const getMaxSizeMB = (file: File) =>
     ? MAX_USER_DATA_SIZE_MB
     : MAX_SIZE_MB
 
-/** 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加 */
-export const validateFiles = (files: File[], currentCount: number): TranslationMessage | null => {
+/** 该文件属于哪种输入类型；无法归类时按 text 处理 */
+export const inputTypeOf = (file: File): 'image' | 'document' | 'text' => {
+  const ext = getFileExt(file.name)
+  if (IMAGE_EXTS.has(ext)) {
+    return 'image'
+  }
+  return DOCUMENT_EXTS.has(ext) ? 'document' : 'text'
+}
+
+/**
+ * 添加前校验：格式 → 模型输入类型 → 大小 → 数量，任一不满足即整批不添加。
+ *
+ * inputTypes 是当前模型的输入能力，缺省时不限制；这只是前端门控，
+ * 服务端与上游仍会独立校验。
+ */
+export const validateFiles = (
+  files: File[],
+  currentCount: number,
+  inputTypes?: string[]
+): TranslationMessage | null => {
   if (files.some((file) => !isAcceptedExt(file.name))) {
     return { key: 'uploadUnsupportedFormat' }
+  }
+  if (inputTypes && inputTypes.length > 0) {
+    const rejected = files.find((file) => {
+      const type = inputTypeOf(file)
+      return type !== 'text' && !inputTypes.includes(type)
+    })
+    if (rejected) {
+      return { key: 'uploadTypeNotSupported', params: { name: rejected.name } }
+    }
   }
   const oversized = files.find((file) => file.size > getMaxSizeMB(file) * 1024 * 1024)
   if (oversized) {

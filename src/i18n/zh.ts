@@ -1,4 +1,5 @@
 export const zh = {
+  uploadTypeNotSupported: '当前模型不支持该类型的附件：{name}',
   settingsEndpoints: '端点',
   settingsEndpointNew: '端点信息',
   settingsEndpointId: '端点 ID（英文，唯一）',

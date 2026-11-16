@@ -14,6 +14,7 @@ import {
   clearSentDraft,
   getDraft,
   prepareDraftMessage,
+  registerInputTypeResolver,
   usePendingSelection,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
@@ -48,6 +49,17 @@ const resolveSystemPrompt = (session: Session | undefined): string => {
   const prompt = persona?.prompt?.trim()
   return prompt && prompt !== '' ? prompt : SYSTEM_PROMPT
 }
+
+/**
+ * 供 drafts 在添加附件前查询当前模型的输入能力。
+ *
+ * 注册而不是直接 import：drafts 已经被本模块引用，反向依赖会成环。
+ */
+registerInputTypeResolver((sessionId) => {
+  const pending = usePendingSelection.getState().modelId
+  const session = sessionId !== null ? getSession(sessionId) : undefined
+  return resolveModel(sessionId === null ? pending : session?.modelId)?.inputTypes
+})
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 安全审核固定开启，所有请求都走扩展模式 */
