@@ -1,6 +1,7 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsModelCount: '{count} models',
   settingsEndpointNamePlaceholder: 'e.g. DeepSeek official',
   settingsEndpointOrigin: 'Endpoint URL',
   settingsEndpointKey: 'API key',

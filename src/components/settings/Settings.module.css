@@ -514,7 +514,8 @@ textarea.fieldInput {
 
 /* 下拉选择：与同排的胶囊输入保持一致——透明底、1px 边框、同高度。
    叠一层 .formSection 提高优先级，压过 Select 组件自身的实心触发器样式。 */
-.formSection .fieldSelect {
+.formSection .fieldSelect,
+.providerBody .fieldSelect {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -593,7 +594,195 @@ textarea.fieldInput {
 }
 
 /* 表单内 Select 的箭头跟随更紧凑的右内边距 */
-.formSection .fieldSelect > span:last-child {
+.formSection .fieldSelect > span:last-child,
+.providerBody .fieldSelect > span:last-child {
   right: 14px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---------- 提供商卡片：端点行 + 内嵌模型列表 ---------- */
+
+.provider {
+  box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+}
+
+/* 收起时是整行；展开时作为卡片标题 */
+.providerHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 60px;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.providerTitle {
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.providerMeta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 展开箭头：收起指右，展开朝下 */
+.chevron {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-tertiary);
+  transform: rotate(-90deg);
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.chevronOpen {
+  transform: rotate(0deg);
+}
+
+/* 卡片主体：与外层列表区分，靠左侧留出缩进 */
+.providerBody {
+  padding: 0 0 16px 24px;
+}
+
+.providerToolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+/* 两列网格：端点配置与模型参数都按这个排 */
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media not all and (min-width: 768px) {
+  .fieldGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 卡片内的模型区：与连接配置之间加分隔线 */
+.modelList {
+  margin-top: 16px;
+  padding-top: 12px;
+  box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+}
+
+.modelListTitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.modelRow {
+  & + & {
+    box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+  }
+}
+
+.modelRowMain {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.modelRowHeader {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.modelRowName {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelRowMeta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.modelRowDelete {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 16px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-state-error-primary);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+/* 模型编辑区：与列表行区分，背景略深并缩进 */
+.modelEditor {
+  margin-bottom: 8px;
+  padding: 12px 12px 8px;
+  border-radius: 12px;
+  background: var(--dsw-alias-interactive-bg-hover);
 }

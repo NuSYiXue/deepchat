@@ -1,4 +1,5 @@
 export const zh = {
+  settingsModelCount: '{count} 个模型',
   settingsEndpointNamePlaceholder: '例如 DeepSeek 官方',
   settingsEndpointOrigin: '接口地址',
   settingsEndpointKey: 'API Key',
