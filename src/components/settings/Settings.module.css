@@ -440,3 +440,160 @@
     max-width: 100%;
   }
 }
+
+/* ---------- 端点 / 模型 / 人设管理 ---------- */
+
+/* 一段可折叠的表单区域：标题 + 若干输入行，与原版 cell 的分隔线一致 */
+.formSection {
+  padding: 12px 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+  box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+}
+
+.formTitle {
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 输入行：上方标签，下方胶囊输入，行间距与原版 cell 一致 */
+.field {
+  & + & {
+    margin-top: 12px;
+  }
+}
+
+.fieldLabel {
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 胶囊输入：与登录框同高同圆角；裸 input / textarea / select 都能用 */
+.fieldInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--ds-control-height-l);
+  padding: 0 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  outline: none;
+  transition: border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &::placeholder {
+    color: var(--dsw-alias-label-caption);
+  }
+
+  &:focus {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+
+  &:disabled {
+    color: var(--dsw-alias-label-caption);
+    cursor: default;
+  }
+}
+
+/* 多行输入不适用胶囊的固定高度 */
+textarea.fieldInput {
+  height: auto;
+  min-height: 88px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 22px;
+  resize: vertical;
+}
+
+/* 下拉选择：与同排的胶囊输入保持一致——透明底、1px 边框、同高度。
+   叠一层 .formSection 提高优先级，压过 Select 组件自身的实心触发器样式。 */
+.formSection .fieldSelect {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  height: var(--ds-control-height-l);
+  padding: 0 42px 0 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 20px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 22px;
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    border-color: var(--dsw-alias-brand-primary);
+    box-shadow: none;
+  }
+}
+
+/* 一组复选项：横向排列，与正文同字号 */
+.checkboxRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.checkboxItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--dsw-alias-brand-primary);
+    cursor: pointer;
+  }
+}
+
+/* 表单底部的操作按钮，右对齐，与原版弹窗按钮一致 */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* 分组小标题：端点 / 模型两个区块之间 */
+.groupTitle {
+  padding: 12px 0 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+}
+
+/* 列表项右侧的操作按钮组 */
+.cellActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+/* 右侧有两个按钮时不再额外留白，否则文本区被挤压导致换行 */
+.textDense {
+  padding-right: 0;
+}
+
+/* 表单内 Select 的箭头跟随更紧凑的右内边距 */
+.formSection .fieldSelect > span:last-child {
+  right: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}

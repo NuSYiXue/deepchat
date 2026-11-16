@@ -1,6 +1,17 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsEndpointNamePlaceholder: 'e.g. DeepSeek official',
+  settingsEndpointOrigin: 'Endpoint URL',
+  settingsEndpointKey: 'API key',
+  settingsEndpointKeyPlaceholder: 'Paste an API key',
+  settingsEndpointKeyKeep: 'Leave blank to keep the saved key',
+  settingsEndpointDialect: 'API dialect',
+  settingsEndpointEdit: 'Edit endpoint',
+  settingsModelEndpoint: 'Endpoint',
+  settingsModelNamePlaceholder: 'e.g. DeepSeek Flash',
+  settingsPersonaNamePlaceholder: 'e.g. Translator',
+  settingsPersonaPromptPlaceholder: 'Describe this assistant’s role and constraints',
   settingsPersonas: 'Personas',
   settingsPersonaNew: 'New persona',
   settingsPersonaEdit: 'Edit persona',
@@ -31,7 +42,7 @@ export const en = {
   settingsReasoningBudget: 'Budget (thinking.budget_tokens)',
   settingsReasoningEffort: 'Effort (reasoning_effort)',
   settingsDefault: 'Default',
-  settingsKeyConfigured: 'Key configured',
+  settingsKeyConfigured: 'Key set',
   settingsKeyMissing: 'No key',
   settingsTest: 'Test',
   settingsTestOk: 'Connection OK',

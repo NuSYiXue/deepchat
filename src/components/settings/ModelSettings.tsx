@@ -5,8 +5,11 @@
  * 模型只描述自己的名字、输入类型、上下文与推理等级。
  *
  * API Key 只写不读：服务端返回 hasKey 与尾部提示，编辑器留空表示保持不变。
+ * id 由客户端生成，不让用户填。
  */
+import clsx from 'clsx'
 import { useState } from 'react'
+import { createId } from '../../utils/id.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
   deleteModel,
@@ -18,6 +21,7 @@ import {
   type ModelConfig,
 } from '../../services/server/config.js'
 import { Button } from '../base/Button.js'
+import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import styles from './Settings.module.css'
 
@@ -33,8 +37,9 @@ type EndpointDraft = {
   nativeWebSearch: boolean
 }
 
+/** 新建端点时给出可用的默认值；id 隐藏生成 */
 const emptyEndpoint = (): EndpointDraft => ({
-  id: '',
+  id: createId(),
   name: '',
   origin: 'https://api.deepseek.com',
   apiKey: '',
@@ -51,6 +56,19 @@ const draftFrom = (endpoint: Endpoint): EndpointDraft => ({
   nativeWebSearch: endpoint.capabilities.nativeWebSearch === true,
 })
 
+/** 新建模型时套用常见默认值，减少必填项 */
+const emptyModel = (endpointId: string): ModelConfig => ({
+  id: createId(),
+  endpointId,
+  name: '',
+  model: '',
+  inputTypes: ['text'],
+  maxContext: 64000,
+  maxOutput: 8192,
+  reasoning: { kind: 'none' },
+  isDefault: false,
+})
+
 export const ModelSettings = () => {
   const t = useTranslate()
   const { endpoints, models } = useConfig()
@@ -59,14 +77,12 @@ export const ModelSettings = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const run = async (action: () => Promise<void>, success?: string) => {
+  const run = async (action: () => Promise<void>) => {
     setBusy(true)
     setError(null)
     try {
       await action()
-      if (success) {
-        showToast({ key: 'settingsSaved' })
-      }
+      showToast({ key: 'settingsSaved' })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -82,45 +98,46 @@ export const ModelSettings = () => {
     await run(async () => {
       await saveEndpoint({
         id: draft.id,
-        name: draft.name,
-        origin: draft.origin,
+        name: draft.name.trim(),
+        origin: draft.origin.trim(),
         // 留空表示沿用已保存的 Key
         ...(draft.apiKey ? { apiKey: draft.apiKey } : {}),
         dialect: draft.dialect,
         capabilities: { nativeWebSearch: draft.nativeWebSearch },
       })
       setEditingEndpoint(null)
-    }, 'saved')
+    })
   }
 
   const submitModel = async () => {
     if (!editingModel) {
       return
     }
-    const model = editingModel
     await run(async () => {
-      await saveModel(model)
+      await saveModel(editingModel)
       setEditingModel(null)
-    }, 'saved')
+    })
   }
 
   return (
     <div>
       {error ? <div className={styles.error}>{error}</div> : null}
 
-      <div className={styles.label}>{t('settingsEndpoints')}</div>
+      <div className={styles.groupTitle}>{t('settingsEndpoints')}</div>
       {endpoints.map((endpoint) => (
         <div key={endpoint.id} className={styles.cell}>
           <div className={styles.row}>
-            <div className={styles.text}>
+            <div className={clsx(styles.text, styles.textDense)}>
               <div className={styles.label}>{endpoint.name}</div>
               <div className={styles.description}>
-                {endpoint.origin} · {endpoint.dialect} ·{' '}
+                {endpoint.origin}
+                {' · '}
+                {endpoint.dialect}
+                {' · '}
                 {endpoint.hasKey ? t('settingsKeyConfigured') : t('settingsKeyMissing')}
-                {endpoint.keyHint ? ` (${endpoint.keyHint})` : ''}
               </div>
             </div>
-            <div>
+            <div className={styles.cellActions}>
               <Button
                 variant="outlined"
                 size="m"
@@ -133,7 +150,7 @@ export const ModelSettings = () => {
                 }
               >
                 {t('settingsTest')}
-              </Button>{' '}
+              </Button>
               <Button
                 variant="outlined"
                 size="m"
@@ -146,95 +163,47 @@ export const ModelSettings = () => {
           </div>
         </div>
       ))}
+
       {editingEndpoint ? (
-        <div className={styles.cell}>
-          <div className={styles.label}>{t('settingsEndpointNew')}</div>
-          <input
-            className={styles.apiKeyInput}
-            placeholder={t('settingsEndpointId')}
-            value={editingEndpoint.id}
-            onChange={(e) => setEditingEndpoint({ ...editingEndpoint, id: e.target.value })}
-          />
-          <input
-            className={styles.apiKeyInput}
-            placeholder={t('settingsEndpointName')}
-            value={editingEndpoint.name}
-            onChange={(e) => setEditingEndpoint({ ...editingEndpoint, name: e.target.value })}
-          />
-          <input
-            className={styles.apiKeyInput}
-            placeholder="https://api.deepseek.com"
-            value={editingEndpoint.origin}
-            onChange={(e) => setEditingEndpoint({ ...editingEndpoint, origin: e.target.value })}
-          />
-          <input
-            className={styles.apiKeyInput}
-            type="password"
-            placeholder={t('settingsEndpointKeyHint')}
-            autoComplete="off"
-            value={editingEndpoint.apiKey}
-            onChange={(e) => setEditingEndpoint({ ...editingEndpoint, apiKey: e.target.value })}
-          />
-          <select
-            className={styles.apiKeyInput}
-            value={editingEndpoint.dialect}
-            onChange={(e) => setEditingEndpoint({ ...editingEndpoint, dialect: e.target.value })}
-          >
-            {DIALECTS.map((dialect) => (
-              <option key={dialect} value={dialect}>
-                {dialect}
-              </option>
-            ))}
-          </select>
-          <label className={styles.description}>
-            <input
-              type="checkbox"
-              checked={editingEndpoint.nativeWebSearch}
-              onChange={(e) =>
-                setEditingEndpoint({ ...editingEndpoint, nativeWebSearch: e.target.checked })
-              }
-            />{' '}
-            {t('settingsNativeSearch')}
-          </label>
-          <div>
-            <Button variant="primary" size="m" disabled={busy} onClick={() => void submitEndpoint()}>
-              {t('confirm')}
-            </Button>{' '}
-            <Button
-              variant="outlined"
-              size="m"
-              disabled={busy}
-              onClick={() => setEditingEndpoint(null)}
-            >
-              {t('cancel')}
-            </Button>
-          </div>
-        </div>
+        <EndpointForm
+          value={editingEndpoint}
+          busy={busy}
+          isNew={!endpoints.some((item) => item.id === editingEndpoint.id)}
+          onChange={setEditingEndpoint}
+          onSubmit={() => void submitEndpoint()}
+          onCancel={() => setEditingEndpoint(null)}
+        />
       ) : (
-        <Button
-          variant="outlined"
-          size="m"
-          onClick={() => setEditingEndpoint(emptyEndpoint())}
-        >
-          {t('settingsAddEndpoint')}
-        </Button>
+        <div className={styles.cell}>
+          <Button
+            variant="outlined"
+            size="m"
+            disabled={busy}
+            onClick={() => setEditingEndpoint(emptyEndpoint())}
+          >
+            {t('settingsAddEndpoint')}
+          </Button>
+        </div>
       )}
 
-      <div className={styles.label}>{t('settingsModels')}</div>
+      <div className={styles.groupTitle}>{t('settingsModels')}</div>
       {models.map((model) => (
         <div key={model.id} className={styles.cell}>
           <div className={styles.row}>
-            <div className={styles.text}>
+            <div className={clsx(styles.text, styles.textDense)}>
               <div className={styles.label}>
                 {model.name || model.model}
                 {model.isDefault ? ` · ${t('settingsDefault')}` : ''}
               </div>
               <div className={styles.description}>
-                {model.model} · {model.inputTypes.join('/')} · {model.maxContext} ctx
-                {model.reasoning.kind !== 'none' ? ` · ${model.reasoning.kind}` : ''}
+                {model.model}
+                {' · '}
+                {model.inputTypes.join(' / ')}
+                {' · '}
+                {model.maxContext} ctx
               </div>
             </div>
-            <div>
+            <div className={styles.cellActions}>
               <Button
                 variant="outlined"
                 size="m"
@@ -242,7 +211,7 @@ export const ModelSettings = () => {
                 onClick={() => setEditingModel(model)}
               >
                 {t('edit')}
-              </Button>{' '}
+              </Button>
               <Button
                 variant="dangerOutlined"
                 size="m"
@@ -255,44 +224,132 @@ export const ModelSettings = () => {
           </div>
         </div>
       ))}
+
       {editingModel ? (
-        <ModelEditor
+        <ModelForm
           value={editingModel}
           endpoints={endpoints}
           busy={busy}
+          isNew={!models.some((item) => item.id === editingModel.id)}
           onChange={setEditingModel}
           onSubmit={() => void submitModel()}
           onCancel={() => setEditingModel(null)}
         />
       ) : endpoints.length > 0 ? (
-        <Button
-          variant="outlined"
-          size="m"
-          onClick={() =>
-            setEditingModel({
-              id: '',
-              endpointId: endpoints[0].id,
-              name: '',
-              model: '',
-              inputTypes: ['text'],
-              maxContext: 64000,
-              maxOutput: 8192,
-              reasoning: { kind: 'none' },
-              isDefault: false,
-            })
-          }
-        >
-          {t('settingsAddModel')}
-        </Button>
+        <div className={styles.cell}>
+          <Button
+            variant="outlined"
+            size="m"
+            disabled={busy}
+            onClick={() => setEditingModel(emptyModel(endpoints[0].id))}
+          >
+            {t('settingsAddModel')}
+          </Button>
+        </div>
       ) : null}
     </div>
   )
 }
 
-const ModelEditor = ({
+const EndpointForm = ({
+  value,
+  busy,
+  isNew,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  value: EndpointDraft
+  busy: boolean
+  isNew: boolean
+  onChange: (value: EndpointDraft) => void
+  onSubmit: () => void
+  onCancel: () => void
+}) => {
+  const t = useTranslate()
+  return (
+    <div className={styles.formSection}>
+      <div className={styles.formTitle}>
+        {isNew ? t('settingsEndpointNew') : t('settingsEndpointEdit')}
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsEndpointName')}</div>
+        <input
+          className={styles.fieldInput}
+          value={value.name}
+          placeholder={t('settingsEndpointNamePlaceholder')}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsEndpointOrigin')}</div>
+        <input
+          className={styles.fieldInput}
+          value={value.origin}
+          placeholder="https://api.deepseek.com"
+          spellCheck={false}
+          onChange={(e) => onChange({ ...value, origin: e.target.value })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsEndpointKey')}</div>
+        <input
+          className={styles.fieldInput}
+          type="password"
+          autoComplete="off"
+          placeholder={isNew ? t('settingsEndpointKeyPlaceholder') : t('settingsEndpointKeyKeep')}
+          value={value.apiKey}
+          onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsEndpointDialect')}</div>
+        <Select
+          ariaLabel={t('settingsEndpointDialect')}
+          className={styles.fieldSelect}
+          value={value.dialect}
+          options={DIALECTS.map((dialect) => ({ value: dialect, label: dialect }))}
+          onChange={(dialect) => onChange({ ...value, dialect })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <label className={styles.checkboxItem}>
+          <input
+            type="checkbox"
+            checked={value.nativeWebSearch}
+            onChange={(e) => onChange({ ...value, nativeWebSearch: e.target.checked })}
+          />
+          {t('settingsNativeSearch')}
+        </label>
+      </div>
+
+      <div className={styles.formActions}>
+        <Button variant="outlined" size="m" disabled={busy} onClick={onCancel}>
+          {t('cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          size="m"
+          disabled={busy || value.name.trim() === '' || value.origin.trim() === ''}
+          onClick={onSubmit}
+        >
+          {t('confirm')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const ModelForm = ({
   value,
   endpoints,
   busy,
+  isNew,
   onChange,
   onSubmit,
   onCancel,
@@ -300,6 +357,7 @@ const ModelEditor = ({
   value: ModelConfig
   endpoints: Endpoint[]
   busy: boolean
+  isNew: boolean
   onChange: (value: ModelConfig) => void
   onSubmit: () => void
   onCancel: () => void
@@ -316,97 +374,118 @@ const ModelEditor = ({
   }
 
   return (
-    <div className={styles.cell}>
-      <div className={styles.label}>{value.id ? t('settingsModelEdit') : t('settingsModelNew')}</div>
-      <input
-        className={styles.apiKeyInput}
-        placeholder={t('settingsModelId')}
-        value={value.id}
-        disabled={Boolean(value.id)}
-        onChange={(e) => onChange({ ...value, id: e.target.value })}
-      />
-      <input
-        className={styles.apiKeyInput}
-        placeholder={t('settingsModelName')}
-        value={value.name}
-        onChange={(e) => onChange({ ...value, name: e.target.value })}
-      />
-      <input
-        className={styles.apiKeyInput}
-        placeholder={t('settingsModelUpstream')}
-        value={value.model}
-        onChange={(e) => onChange({ ...value, model: e.target.value })}
-      />
-      <select
-        className={styles.apiKeyInput}
-        value={value.endpointId}
-        onChange={(e) => onChange({ ...value, endpointId: e.target.value })}
-      >
-        {endpoints.map((endpoint) => (
-          <option key={endpoint.id} value={endpoint.id}>
-            {endpoint.name}
-          </option>
-        ))}
-      </select>
+    <div className={styles.formSection}>
+      <div className={styles.formTitle}>
+        {isNew ? t('settingsModelNew') : t('settingsModelEdit')}
+      </div>
 
-      <div className={styles.description}>{t('settingsInputTypes')}</div>
-      {INPUT_TYPES.map((type) => (
-        <label key={type} className={styles.description}>
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsModelEndpoint')}</div>
+        <Select
+          ariaLabel={t('settingsModelEndpoint')}
+          className={styles.fieldSelect}
+          value={value.endpointId}
+          options={endpoints.map((endpoint) => ({ value: endpoint.id, label: endpoint.name }))}
+          onChange={(endpointId) => onChange({ ...value, endpointId })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsModelUpstream')}</div>
+        <input
+          className={styles.fieldInput}
+          value={value.model}
+          placeholder="deepseek-flash"
+          spellCheck={false}
+          onChange={(e) => onChange({ ...value, model: e.target.value })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsModelName')}</div>
+        <input
+          className={styles.fieldInput}
+          value={value.name}
+          placeholder={t('settingsModelNamePlaceholder')}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsInputTypes')}</div>
+        <div className={styles.checkboxRow}>
+          {INPUT_TYPES.map((type) => (
+            <label key={type} className={styles.checkboxItem}>
+              <input
+                type="checkbox"
+                checked={value.inputTypes.includes(type)}
+                onChange={() => toggleInput(type)}
+              />
+              {type}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsMaxContext')}</div>
+        <input
+          className={styles.fieldInput}
+          type="number"
+          value={value.maxContext}
+          onChange={(e) => onChange({ ...value, maxContext: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsMaxOutput')}</div>
+        <input
+          className={styles.fieldInput}
+          type="number"
+          value={value.maxOutput}
+          onChange={(e) => onChange({ ...value, maxOutput: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className={styles.field}>
+        <div className={styles.fieldLabel}>{t('settingsReasoning')}</div>
+        <Select
+          ariaLabel={t('settingsReasoning')}
+          className={styles.fieldSelect}
+          value={value.reasoning.kind ?? 'none'}
+          options={[
+            { value: 'none', label: t('settingsReasoningNone') },
+            { value: 'budget', label: t('settingsReasoningBudget') },
+            { value: 'effort', label: t('settingsReasoningEffort') },
+          ]}
+          onChange={(kind) =>
+            onChange({ ...value, reasoning: { kind: kind as 'none' | 'budget' | 'effort' } })
+          }
+        />
+      </div>
+
+      <div className={styles.field}>
+        <label className={styles.checkboxItem}>
           <input
             type="checkbox"
-            checked={value.inputTypes.includes(type)}
-            onChange={() => toggleInput(type)}
-          />{' '}
-          {type}
+            checked={value.isDefault}
+            onChange={(e) => onChange({ ...value, isDefault: e.target.checked })}
+          />
+          {t('settingsDefault')}
         </label>
-      ))}
+      </div>
 
-      <input
-        className={styles.apiKeyInput}
-        type="number"
-        placeholder={t('settingsMaxContext')}
-        value={value.maxContext}
-        onChange={(e) => onChange({ ...value, maxContext: Number(e.target.value) })}
-      />
-      <input
-        className={styles.apiKeyInput}
-        type="number"
-        placeholder={t('settingsMaxOutput')}
-        value={value.maxOutput}
-        onChange={(e) => onChange({ ...value, maxOutput: Number(e.target.value) })}
-      />
-
-      <div className={styles.description}>{t('settingsReasoning')}</div>
-      <select
-        className={styles.apiKeyInput}
-        value={value.reasoning.kind}
-        onChange={(e) =>
-          onChange({
-            ...value,
-            reasoning: { kind: e.target.value as 'none' | 'budget' | 'effort' },
-          })
-        }
-      >
-        <option value="none">{t('settingsReasoningNone')}</option>
-        <option value="budget">{t('settingsReasoningBudget')}</option>
-        <option value="effort">{t('settingsReasoningEffort')}</option>
-      </select>
-
-      <label className={styles.description}>
-        <input
-          type="checkbox"
-          checked={value.isDefault}
-          onChange={(e) => onChange({ ...value, isDefault: e.target.checked })}
-        />{' '}
-        {t('settingsDefault')}
-      </label>
-
-      <div>
-        <Button variant="primary" size="m" disabled={busy} onClick={onSubmit}>
-          {t('confirm')}
-        </Button>{' '}
+      <div className={styles.formActions}>
         <Button variant="outlined" size="m" disabled={busy} onClick={onCancel}>
           {t('cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          size="m"
+          disabled={busy || value.model.trim() === ''}
+          onClick={onSubmit}
+        >
+          {t('confirm')}
         </Button>
       </div>
     </div>
