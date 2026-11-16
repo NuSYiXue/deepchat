@@ -1,6 +1,10 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsReasoningAdd: 'Add level',
+  settingsReasoningOffValue: 'Turns reasoning off',
+  settingsReasoningValue: 'API value',
+  settingsReasoningLevel: 'Level',
   settingsKeyReveal: 'Show key',
   settingsKeyHide: 'Hide key',
   settingsModelAdvanced: 'Advanced',

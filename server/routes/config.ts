@@ -6,11 +6,13 @@
  */
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError, assertCleanText, readJson } from '../http.ts'
+import { normalizeEfforts } from '../reasoning.ts'
 import {
   DEFAULT_PERSONA_ID,
   listEndpoints,
   listModels,
   listPersonas,
+  transaction,
   type FileRow,
 } from '../db.ts'
 
@@ -157,7 +159,7 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
       inputTypes: JSON.parse(row.input_types as string),
       maxContext: row.max_context,
       maxOutput: row.max_output,
-      reasoning: JSON.parse(row.reasoning as string),
+      reasoning: normalizeEfforts(JSON.parse(row.reasoning as string)) ?? {},
       isDefault: row.is_default === 1,
     })),
     settings: Object.fromEntries(
@@ -192,6 +194,26 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
   deleteModel: (id: string) => {
     db.prepare(`delete from models where id = ?`).run(id)
     db.prepare(`update sessions set model_id = null where model_id = ?`).run(id)
+    return { ok: true }
+  },
+
+  /**
+   * 删除端点，连带它的模型。
+   *
+   * 模型表对 endpoints 有外键级联，但这里显式删除以便同时把引用了这些模型的
+   * 会话重置回默认，否则会话会指向已不存在的配置。
+   */
+  deleteEndpoint: (id: string) => {
+    transaction(db, () => {
+      const models = db.prepare(`select id from models where endpoint_id = ?`).all(id) as {
+        id: string
+      }[]
+      for (const model of models) {
+        db.prepare(`update sessions set model_id = null where model_id = ?`).run(model.id)
+      }
+      db.prepare(`delete from models where endpoint_id = ?`).run(id)
+      db.prepare(`delete from endpoints where id = ?`).run(id)
+    })
     return { ok: true }
   },
 

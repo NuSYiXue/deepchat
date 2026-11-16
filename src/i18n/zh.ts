@@ -1,4 +1,8 @@
 export const zh = {
+  settingsReasoningAdd: '添加档位',
+  settingsReasoningOffValue: '关闭思考，无需填写',
+  settingsReasoningValue: 'API 参数值',
+  settingsReasoningLevel: '档位',
   settingsKeyReveal: '显示密钥',
   settingsKeyHide: '隐藏密钥',
   settingsModelAdvanced: '高级设置',

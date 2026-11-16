@@ -8,6 +8,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { HttpError, readJson } from '../http.ts'
 import { toOpenAIBody, translateOpenAIStream } from './openai.ts'
 import { trimMessages } from '../context.ts'
+import { normalizeEfforts, pickLevel, type ReasoningEfforts } from '../reasoning.ts'
 import { formatHits, relaySearch } from '../search.ts'
 
 export type EndpointRow = {
@@ -28,12 +29,7 @@ export type Capabilities = {
   filesApi: boolean
 }
 
-/** 模型配置里的推理方式 */
-export type ModelReasoning = {
-  kind?: 'none' | 'budget' | 'effort'
-  levels?: { label: string; value: string | number }[]
-  defaultLevel?: string | number
-}
+
 
 const DEFAULT_CAPABILITIES: Capabilities = {
   latestReminder: true,
@@ -158,36 +154,32 @@ const assertChatBody = (value: unknown): ChatRequestBody => {  if (typeof value 
  * 不支持的字段整块省略，避免陌生端点因未知字段返回 400。
  */
 /**
- * 按模型配置生成推理参数。
+ * 按端点方言生成推理参数。
  *
- * 三种约定：
- * - budget：Anthropic 风格，thinking.budget_tokens；
- * - effort：OpenAI 风格，reasoning_effort；
- * - none：不发任何推理字段。
- *
- * 等级值来自模型配置；请求未指定时用 defaultLevel。
+ * - off 或不发送：不带任何推理字段；
+ * - deepseek / anthropic：thinking 开关 + budget_tokens（值可解析为数字时），
+ *   否则按 reasoning_effort 透传；
+ * - openai：reasoning_effort。
  */
 const buildReasoning = (
-  reasoning: { kind?: string; defaultLevel?: string | number } | undefined,
-  level: string | number | undefined
+  efforts: ReasoningEfforts | undefined,
+  dialect: string,
+  requested?: string | number
 ): { thinking?: unknown; reasoning_effort?: unknown } => {
-  if (!reasoning || reasoning.kind === 'none' || reasoning.kind === undefined) {
+  const picked = pickLevel(efforts, requested)
+  if (!picked || picked.level === 'off') {
     return {}
   }
-  const value = level ?? reasoning.defaultLevel
-  if (value === undefined) {
-    return {}
-  }
-  if (reasoning.kind === 'budget') {
-    const budget = typeof value === 'number' ? value : Number(value)
-    return Number.isFinite(budget) && budget > 0
-      ? { thinking: { type: 'enabled', budget_tokens: budget } }
-      : {}
-  }
-  if (reasoning.kind === 'effort') {
+  const value = picked.value ?? picked.level
+  if (dialect === 'openai') {
     return { reasoning_effort: value }
   }
-  return {}
+  // Anthropic / DeepSeek：数值视为 token 预算，否则按强度字符串透传
+  const budget = Number(value)
+  if (Number.isFinite(budget) && budget > 0 && String(value).trim() !== '') {
+    return { thinking: { type: 'enabled', budget_tokens: budget } }
+  }
+  return { reasoning_effort: value }
 }
 
 /**
@@ -198,7 +190,8 @@ const buildReasoning = (
 export const buildUpstreamBody = (
   body: ChatRequestBody,
   capabilities: Capabilities,
-  reasoning?: { kind?: string; defaultLevel?: string | number }
+  dialect: string,
+  efforts?: ReasoningEfforts
 ): Record<string, unknown> => {
   const messages = capabilities.latestReminder
     ? body.messages
@@ -211,8 +204,8 @@ export const buildUpstreamBody = (
   if (typeof body.system === 'string' && body.system !== '') {
     payload.system = body.system
   }
-  // 模型配置声明的推理方式优先；没有配置时沿用前端的开关
-  const reasoningFields = buildReasoning(reasoning, body.reasoningLevel)
+  // 模型声明了推理档位时按档位生成参数；没有声明则沿用前端的深度思考开关
+  const reasoningFields = buildReasoning(efforts, dialect, body.reasoningLevel)
   if (reasoningFields.thinking !== undefined) {
     payload.thinking = reasoningFields.thinking
   } else if (body.thinking) {
@@ -258,7 +251,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
   ): {
     endpoint: EndpointRow
     model: string
-    reasoning?: ModelReasoning
+    reasoning?: ReasoningEfforts
     maxContext?: number
     maxOutput?: number
   } => {
@@ -276,10 +269,10 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     if (!row) {
       throw new HttpError(400, 'no model configured')
     }
-    let reasoning: ModelReasoning | undefined
+    let reasoning: ReasoningEfforts | undefined
     if (typeof row.reasoning === 'string') {
       try {
-        reasoning = JSON.parse(row.reasoning) as ModelReasoning
+        reasoning = normalizeEfforts(JSON.parse(row.reasoning))
       } catch {
         // 配置损坏时按不支持推理处理
       }
@@ -334,7 +327,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       }
 
       const reasoning = modelConfig
-      const upstreamBody = buildUpstreamBody(body, capabilities, reasoning)
+      const upstreamBody = buildUpstreamBody(body, capabilities, endpoint.dialect, reasoning)
       // 前端传的 model 是模型 id 或上游模型名；以配置表里的为准
       upstreamBody.model = model
       // 输出上限：请求没指定时用模型配置值

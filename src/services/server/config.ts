@@ -25,11 +25,14 @@ export type Endpoint = {
   keyHint: string | null
 }
 
-export type ReasoningConfig = {
-  kind: 'none' | 'budget' | 'effort'
-  levels?: { label: string; value: string | number }[]
-  defaultLevel?: string | number
-}
+/**
+ * 推理档位声明，格式与 DeepSeekRuntime 一致：键是档位名，值是发给上游的
+ * API 参数值。off 表示关闭思考，其值为 null。
+ */
+export type ReasoningEfforts = Record<string, string | null>
+
+/** 档位升级顺序，与上游约定一致 */
+export const REASONING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export type ModelConfig = {
   id: string
@@ -39,7 +42,7 @@ export type ModelConfig = {
   inputTypes: string[]
   maxContext: number
   maxOutput: number
-  reasoning: ReasoningConfig
+  reasoning: ReasoningEfforts
   isDefault: boolean
 }
 
@@ -126,6 +129,11 @@ export const saveModel = async (value: Partial<ModelConfig> & {
   model: string
 }): Promise<void> => {
   await sendJson('/api/config/models', 'POST', value)
+  await reloadConfig()
+}
+
+export const deleteEndpoint = async (id: string): Promise<void> => {
+  await sendEmpty(`/api/config/endpoints/${encodeURIComponent(id)}`, 'DELETE')
   await reloadConfig()
 }
 
