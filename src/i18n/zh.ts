@@ -1,4 +1,9 @@
 export const zh = {
+  settingsKeyReveal: '显示密钥',
+  settingsKeyHide: '隐藏密钥',
+  settingsModelAdvanced: '高级设置',
+  settingsConnection: '连接',
+  settingsTagCustom: '自定义',
   settingsModelCount: '{count} 个模型',
   settingsEndpointNamePlaceholder: '例如 DeepSeek 官方',
   settingsEndpointOrigin: '接口地址',

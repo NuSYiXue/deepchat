@@ -1,0 +1,508 @@
+/* 模型设置：照 DeepSeekRuntime 的 Models 页。
+ *
+ * DSH 的 settings-card-* / bg-module-platform / radius-* 在本项目 theme.css 里
+ * 没有定义，这里换成 border-l2 / bg-layer-2 / login-input 并硬编码圆角；
+ * 颜色一律走 --dsw-alias-*，保证深色主题不会退化成浅色。
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.noticeError {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 端点卡片 */
+.rowCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rowIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowName {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+/* 「自定义」标签：读作名称的注解 */
+.rowTag {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 凭证状态圆点：绿=已配置，红=缺失 */
+.credentialDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dotConfigured {
+  background: var(--dsw-alias-brand-primary);
+}
+
+.dotMissing {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.rowMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowActions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* ---------- 按钮 ---------- */
+
+.primaryButton,
+.secondaryButton,
+.addModelButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-button-primary-hover);
+  }
+}
+
+.secondaryButton,
+.addModelButton {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.addModelButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 卡片头部的按钮用紧凑尺寸 */
+.rowActions .secondaryButton {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 列表末尾的整行虚线按钮 */
+.addActions {
+  display: flex;
+}
+
+.addButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  height: 44px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+/* ---------- 编辑区 ---------- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--dsw-specific-login-input);
+}
+
+.editorHeader,
+.modelsHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.editorTitle {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.editorRoute {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fieldGrid,
+.modelAdvanced {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media not all and (min-width: 768px) {
+  .fieldGrid,
+  .modelAdvanced {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 胶囊输入 */
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 19px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  outline: none;
+  transition: border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &::placeholder {
+    color: var(--dsw-alias-label-caption);
+  }
+
+  &:focus {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+
+  &:read-only {
+    color: var(--dsw-alias-label-secondary);
+    cursor: default;
+  }
+}
+
+/* 下拉与输入框同形 */
+.editor .select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 38px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 19px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 22px;
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    border-color: var(--dsw-alias-brand-primary);
+    box-shadow: none;
+  }
+
+  & > span:last-child {
+    right: 12px;
+  }
+}
+
+/* API Key：输入框内嵌一个眼睛按钮 */
+.keyInput {
+  position: relative;
+
+  .input {
+    padding-right: 38px;
+  }
+}
+
+.keyToggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  transform: translateY(-50%);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.checkboxRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-height: 32px;
+  align-items: center;
+}
+
+.checkboxItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+
+  input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--dsw-alias-brand-primary);
+    cursor: pointer;
+  }
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- 模型条目 ---------- */
+
+.models {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* 单个模型：嵌套小卡片 */
+.modelEntry {
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+/* 网格列序与 DSH 一致：模型 id / 展开 / 删除 / 显示名 */
+.modelRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.modelIdInput,
+.modelNameInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+
+  &:read-only {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.modelNameInput {
+  font-family: inherit;
+}
+
+.modelIdStatic {
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.iconButton {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.iconButtonDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 展开箭头 */
+.chevron {
+  display: flex;
+  transform: rotate(-90deg);
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.chevronOpen {
+  transform: rotate(0deg);
+}
+
+/* 展开后的字段区：占满整行并按两列排 */
+.modelAdvanced {
+  padding: 8px 6px 4px;
+}
+
+.modelInputTypes {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+
+  legend {
+    margin-bottom: 4px;
+    padding: 0;
+  }
+}
+
+.addModelActions {
+  display: flex;
+}
+
+.addModelActions .addModelButton {
+  flex: 1;
+  height: 38px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 10px;
+  color: var(--dsw-alias-label-secondary);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}

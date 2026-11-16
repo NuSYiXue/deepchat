@@ -1,6 +1,11 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsKeyReveal: 'Show key',
+  settingsKeyHide: 'Hide key',
+  settingsModelAdvanced: 'Advanced',
+  settingsConnection: 'Connection',
+  settingsTagCustom: 'Custom',
   settingsModelCount: '{count} models',
   settingsEndpointNamePlaceholder: 'e.g. DeepSeek official',
   settingsEndpointOrigin: 'Endpoint URL',
