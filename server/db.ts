@@ -376,8 +376,9 @@ export const deleteUnreferencedFiles = (db: DatabaseSync, fileIds: string[]): vo
 export const listPersonas = (db: DatabaseSync) =>
   db.prepare(`select * from personas order by builtin desc, position, name`).all()
 
+/** 列端点：内置的 DeepSeek 官方端点永远置顶，其余按名称排 */
 export const listEndpoints = (db: DatabaseSync) =>
-  db.prepare(`select * from endpoints order by name`).all()
+  db.prepare(`select * from endpoints order by builtin desc, name`).all()
 
 export const listModels = (db: DatabaseSync) =>
   db.prepare(`select * from models order by position, name`).all()

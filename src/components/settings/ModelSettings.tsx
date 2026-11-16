@@ -261,40 +261,24 @@ const ProviderEditor = ({
   const isNew = (id: string) => !models.some((item) => item.id === id)
 
   /**
-   * 内置端点完全沿用项目原本的配置，只开放 API Key 可改。
+   * 内置端点完全沿用项目原本的配置。
    *
-   * 它的 origin / 方言 / 搜索能力都由程序决定：这些一旦被改坏，「深度思考」
-   * 回落、语音、附件上传等依赖官方能力的路径都会失效。
+   * 和原版一致：这里只有 API Key 一项，名称、地址、方言、搜索能力都不出现——
+   * 它们由程序固定，一旦被改坏，深度思考回落、语音、附件上传等依赖官方能力的
+   * 路径都会失效。
    */
-  const locked = endpoint?.builtin === true
+  const builtin = endpoint?.builtin === true
 
   return (
     <div className={styles.editor}>
       <div className={styles.editorHeader}>
         <span className={styles.editorTitle}>{t('settingsConnection')}</span>
-        {endpoint ? <span className={styles.editorRoute}>{endpoint.dialect}</span> : null}
+        {endpoint && !builtin ? (
+          <span className={styles.editorRoute}>{endpoint.dialect}</span>
+        ) : null}
       </div>
 
-      <div className={styles.fieldGrid}>
-        <Field label={t('settingsEndpointName')}>
-          <input
-            className={styles.input}
-            value={draft?.name ?? ''}
-            placeholder={t('settingsEndpointNamePlaceholder')}
-            readOnly={locked}
-            onChange={(e) => draft && setDraft({ ...draft, name: e.target.value })}
-          />
-        </Field>
-        <Field label={t('settingsEndpointOrigin')}>
-          <input
-            className={styles.input}
-            value={draft?.origin ?? ''}
-            placeholder="https://api.deepseek.com"
-            spellCheck={false}
-            readOnly={locked}
-            onChange={(e) => draft && setDraft({ ...draft, origin: e.target.value })}
-          />
-        </Field>
+      {builtin ? (
         <Field label={t('settingsEndpointKey')}>
           <ApiKeyInput
             value={draft?.apiKey ?? ''}
@@ -303,35 +287,59 @@ const ProviderEditor = ({
             onChange={(value) => draft && setDraft({ ...draft, apiKey: value })}
           />
         </Field>
-        <Field label={t('settingsEndpointDialect')}>
-          <Select
-            ariaLabel={t('settingsEndpointDialect')}
-            className={styles.select}
-            value={draft?.dialect ?? 'deepseek'}
-            options={DIALECTS.map((dialect) => ({ value: dialect, label: dialect }))}
-            disabled={locked}
-            onChange={(dialect) => draft && setDraft({ ...draft, dialect })}
+      ) : (
+        <div className={styles.fieldGrid}>
+          <Field label={t('settingsEndpointName')}>
+            <input
+              className={styles.input}
+              value={draft?.name ?? ''}
+              placeholder={t('settingsEndpointNamePlaceholder')}
+              onChange={(e) => draft && setDraft({ ...draft, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('settingsEndpointOrigin')}>
+            <input
+              className={styles.input}
+              value={draft?.origin ?? ''}
+              placeholder="https://api.deepseek.com"
+              spellCheck={false}
+              onChange={(e) => draft && setDraft({ ...draft, origin: e.target.value })}
+            />
+          </Field>
+          <Field label={t('settingsEndpointKey')}>
+            <ApiKeyInput
+              value={draft?.apiKey ?? ''}
+              savedMask={endpoint?.hasKey ? (endpoint.keyHint ?? '••••') : undefined}
+              placeholder={t('settingsEndpointKeyPlaceholder')}
+              onChange={(value) => draft && setDraft({ ...draft, apiKey: value })}
+            />
+          </Field>
+          <Field label={t('settingsEndpointDialect')}>
+            <Select
+              ariaLabel={t('settingsEndpointDialect')}
+              className={styles.select}
+              value={draft?.dialect ?? 'deepseek'}
+              options={DIALECTS.map((dialect) => ({ value: dialect, label: dialect }))}
+              onChange={(dialect) => draft && setDraft({ ...draft, dialect })}
+            />
+          </Field>
+        </div>
+      )}
+
+      {builtin ? null : (
+        <label className={styles.checkboxItem}>
+          <input
+            type="checkbox"
+            checked={draft?.nativeWebSearch ?? false}
+            onChange={(e) => draft && setDraft({ ...draft, nativeWebSearch: e.target.checked })}
           />
-        </Field>
-      </div>
-
-      <label className={styles.checkboxItem}>
-        <input
-          type="checkbox"
-          checked={draft?.nativeWebSearch ?? false}
-          disabled={locked}
-          onChange={(e) => draft && setDraft({ ...draft, nativeWebSearch: e.target.checked })}
-        />
-        {t('settingsNativeSearch')}
-      </label>
-
-      {locked ? (
-        <p className={styles.reasoningHint}>{t('settingsBuiltinEndpointHint')}</p>
-      ) : null}
+          {t('settingsNativeSearch')}
+        </label>
+      )}
 
       <EditorFooter
         busy={busy}
-        submitDisabled={!draft?.origin.trim() || !draft.name.trim()}
+        submitDisabled={builtin ? false : !draft?.origin.trim() || !draft.name.trim()}
         onCancel={onClose}
         onSubmit={() => void saveEndpointConfig()}
         extra={
@@ -374,30 +382,40 @@ const ProviderEditor = ({
                     aria-label={t('settingsModelUpstream')}
                     title={model.model}
                   />
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    aria-label={t('settingsModelAdvanced')}
-                    aria-expanded={expanded}
-                    title={t('settingsModelAdvanced')}
-                    onClick={() =>
-                      setModelDraft((current) => (current?.id === model.id ? null : model))
-                    }
-                  >
-                    <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
-                      <IconChevronDownOutline14 />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={clsx(styles.iconButton, styles.iconButtonDanger)}
-                    aria-label={`${t('delete')} ${model.model}`}
-                    title={t('delete')}
-                    disabled={busy || model.isDefault}
-                    onClick={() => void run(() => deleteModel(model.id))}
-                  >
-                    <IconTrashOutline16 />
-                  </button>
+                  {/* 内置端点的模型与原版一致：只展示，不可展开编辑或删除 */}
+                  {builtin ? (
+                    <>
+                      <span />
+                      <span />
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={t('settingsModelAdvanced')}
+                        aria-expanded={expanded}
+                        title={t('settingsModelAdvanced')}
+                        onClick={() =>
+                          setModelDraft((current) => (current?.id === model.id ? null : model))
+                        }
+                      >
+                        <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
+                          <IconChevronDownOutline14 />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={clsx(styles.iconButton, styles.iconButtonDanger)}
+                        aria-label={`${t('delete')} ${model.model}`}
+                        title={t('delete')}
+                        disabled={busy || model.isDefault}
+                        onClick={() => void run(() => deleteModel(model.id))}
+                      >
+                        <IconTrashOutline16 />
+                      </button>
+                    </>
+                  )}
                   <input
                     className={styles.modelNameInput}
                     value={model.name}
@@ -410,6 +428,7 @@ const ProviderEditor = ({
                 {expanded && modelDraft ? (
                   <ModelFields
                     value={modelDraft}
+                    builtin={builtin}
                     busy={busy}
                     onChange={setModelDraft}
                     onCancel={() => setModelDraft(null)}
@@ -432,6 +451,7 @@ const ProviderEditor = ({
               </div>
               <ModelFields
                 value={modelDraft}
+                builtin={builtin}
                 busy={busy}
                 onChange={setModelDraft}
                 onCancel={() => setModelDraft(null)}
@@ -445,16 +465,18 @@ const ProviderEditor = ({
             </div>
           ) : null}
 
-          <div className={styles.addModelActions}>
-            <button
-              type="button"
-              className={styles.addModelButton}
-              disabled={busy || modelDraft !== null}
-              onClick={() => setModelDraft(emptyModel(endpoint.id))}
-            >
-              {t('settingsAddModel')}
-            </button>
-          </div>
+          {builtin ? null : (
+            <div className={styles.addModelActions}>
+              <button
+                type="button"
+                className={styles.addModelButton}
+                disabled={busy || modelDraft !== null}
+                onClick={() => setModelDraft(emptyModel(endpoint.id))}
+              >
+                {t('settingsAddModel')}
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
     </div>
@@ -464,12 +486,15 @@ const ProviderEditor = ({
 /** 模型完整字段：新建与展开编辑共用 */
 const ModelFields = ({
   value,
+  builtin,
   busy,
   onChange,
   onCancel,
   onSubmit,
 }: {
   value: ModelConfig
+  /** 内置端点下的模型不提供推理等级：项目原本没有这个概念 */
+  builtin: boolean
   busy: boolean
   onChange: (value: ModelConfig) => void
   onCancel: () => void
@@ -543,7 +568,7 @@ const ModelFields = ({
         </div>
       </fieldset>
 
-      <ReasoningEditor value={value} onChange={onChange} />
+      {builtin ? null : <ReasoningEditor value={value} onChange={onChange} />}
 
       {/* 默认模型是全局唯一的：用一个明确的按钮表达，而不是一个可勾选的框 */}
       <div className={styles.defaultRow}>
