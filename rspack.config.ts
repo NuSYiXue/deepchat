@@ -17,7 +17,7 @@ const cssLoader = {
 }
 
 type ConfigOptions = {
-  /** 公开 API 的地址，注入为 __API_ORIGIN__ */
+  /** 官方 DeepSeek 端点的默认地址；服务端化后前端不再直连上游 */
   apiOrigin?: string
   /** 开发服务器配置，支持本地接口代理 */
   devServer?: Configuration['devServer']
