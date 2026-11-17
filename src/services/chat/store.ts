@@ -294,13 +294,19 @@ export const bindChatPersistence = () => {
 }
 
 /** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
-const createReply = (): AssistantMessage => {
+/**
+ * 新建一条待生成的回复。
+ *
+ * model 记录的是本条回复实际使用的模型名，取自会话选择的模型配置；
+ * 它同时是历史快照，重新生成与续写都按它回放。
+ */
+const createReply = (model: ChatModel): AssistantMessage => {
   const { thinking, search } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
+    model,
     thinking,
     search,
     prefix: true,
@@ -308,6 +314,10 @@ const createReply = (): AssistantMessage => {
     blocks: [],
   }
 }
+
+/** 会话当前应使用的模型名：取模型配置，缺省回落到内置默认 */
+const modelNameOf = (session: Session | undefined): ChatModel =>
+  resolveModel(session?.modelId)?.model ?? MODEL
 
 /** 仍在生成中的回复（页面关闭或导出时未结束）按「已停止」处理 */
 const settleInterrupted = (session: Session): Session => {
@@ -670,7 +680,7 @@ export const sendMessage = (targetSessionId: string | null) => {
     })),
     createdAt: now,
   }
-  const reply = createReply()
+  const reply = createReply(modelNameOf(getSession(sessionId)))
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
     updatedAt: now,
@@ -704,7 +714,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     return
   }
   const history = path.slice(0, index - 1)
-  const reply = createReply()
+  const reply = createReply(modelNameOf(getSession(sessionId)))
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
@@ -736,7 +746,7 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
     files: previous.files,
     createdAt: Date.now(),
   }
-  const reply = createReply()
+  const reply = createReply(modelNameOf(getSession(sessionId)))
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, path[index - 1]?.id ?? null, [question, reply]),
     updatedAt: Date.now(),
