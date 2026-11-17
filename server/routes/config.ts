@@ -121,8 +121,8 @@ const upsertModel = (
   }
   db.prepare(
     `insert into models
-       (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search, enabled)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(id) do update set
        endpoint_id = excluded.endpoint_id,
        name = excluded.name,
@@ -133,7 +133,8 @@ const upsertModel = (
        reasoning = excluded.reasoning,
        is_default = excluded.is_default,
        position = excluded.position,
-       native_search = excluded.native_search`
+       native_search = excluded.native_search,
+       enabled = excluded.enabled`
   ).run(
     body.id,
     body.endpointId,
@@ -145,7 +146,8 @@ const upsertModel = (
     JSON.stringify(body.reasoning ?? {}),
     body.isDefault === true ? 1 : 0,
     typeof body.position === 'number' ? Math.trunc(body.position) : 0,
-    body.nativeSearch === true ? 1 : 0
+    body.nativeSearch === true ? 1 : 0,
+    body.enabled === false ? 0 : 1
   )
   if (body.isDefault === true) {
     db.prepare(`update models set is_default = 0 where id <> ?`).run(body.id)
@@ -191,6 +193,7 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
       maxOutput: row.max_output,
       reasoning: normalizeEfforts(JSON.parse(row.reasoning as string)) ?? {},
       nativeSearch: row.native_search === 1,
+      enabled: row.enabled === 1,
       isDefault: row.is_default === 1,
     })),
     settings: Object.fromEntries(

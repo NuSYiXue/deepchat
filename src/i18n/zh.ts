@@ -1,4 +1,6 @@
 export const zh = {
+  settingsModelEnabled: '启用该模型',
+  settingsTestOkMs: '连接正常（{ms} ms）',
   settingsInputTypeDocument: '文档',
   settingsInputTypeImage: '图片',
   settingsInputTypeText: '文本',

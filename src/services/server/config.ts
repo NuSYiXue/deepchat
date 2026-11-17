@@ -48,6 +48,8 @@ export type ModelConfig = {
   isDefault: boolean
   /** 该模型在服务端支持原生联网搜索 */
   nativeSearch: boolean
+  /** 关闭后不出现在聊天下拉，也不参与任何自动选择 */
+  enabled: boolean
 }
 
 /** 内置默认人设的 id，与服务端一致 */
@@ -163,6 +165,20 @@ export const listEndpointModels = async (
     { endpointId, draft }
   )
   return result.models
+}
+
+/** 按模型测试连通性：发一次最小请求确认可用 */
+export const testModel = async (modelId: string): Promise<number> => {
+  const result = await sendJson<{ latencyMs: number }>('/api/config/test-model', 'POST', {
+    modelId,
+  })
+  return result.latencyMs
+}
+
+/** 切换模型启用状态 */
+export const setModelEnabled = async (model: ModelConfig, enabled: boolean): Promise<void> => {
+  await sendJson('/api/config/models', 'POST', { ...model, enabled })
+  await reloadConfig()
 }
 
 export const testEndpoint = async (endpointId: string): Promise<void> => {

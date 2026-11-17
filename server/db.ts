@@ -75,7 +75,9 @@ create table if not exists models (
   is_default  integer not null default 0,
   position    integer not null default 0,
   -- 1 表示该模型在服务端支持原生联网搜索
-  native_search integer not null default 0
+  native_search integer not null default 0,
+  -- 1 表示模型启用；关闭后不出现在聊天下拉，也不参与任何自动选择
+  enabled integer not null default 1
 );
 
 create table if not exists files (
@@ -155,6 +157,9 @@ const migrate = (db: DatabaseSync): void => {
   }
 
   const models = columnsOf(db, 'models')
+  if (!models.has('enabled')) {
+    db.exec(`alter table models add column enabled integer not null default 1`)
+  }
   if (!models.has('native_search')) {
     db.exec(`alter table models add column native_search integer not null default 0`)
     // 旧数据把能力记在端点层：把它迁移到该端点下的所有模型
@@ -165,6 +170,13 @@ const migrate = (db: DatabaseSync): void => {
       )
     `)
   }
+
+  // 内置 DeepSeek 官方模型始终具备原生搜索：它是搜索兜底的唯一来源，
+  // 关掉之后「智能搜索」对自定义模型就没有兜底可用。幂等，每次启动都校正。
+  db.exec(`
+    update models set native_search = 1
+    where endpoint_id in (select id from endpoints where builtin = 1)
+  `)
 }
 
 export type SeedConfig = {
@@ -209,8 +221,8 @@ export const seedEndpoints = (db: DatabaseSync, seed: SeedConfig): void => {
       )
       db.prepare(
         `insert or ignore into models
-           (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position)
-         values ('default', 'default', ?, ?, ?, 64000, 8192, '{}', ?, 0)`
+           (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search)
+         values ('default', 'default', ?, ?, ?, 64000, 8192, '{}', ?, 0, 1)`
       ).run(
         model,
         model,

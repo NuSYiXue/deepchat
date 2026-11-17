@@ -143,6 +143,14 @@ router.post('/api/config/models/list', async ({ req }) => {
   )
 })
 
+router.post('/api/config/test-model', async ({ req }) => {
+  const body = (await req.json()) as { modelId?: unknown }
+  if (typeof body.modelId !== 'string') {
+    throw new HttpError(400, 'modelId is required')
+  }
+  return json(await chat.testModel(body.modelId))
+})
+
 router.post('/api/config/test-endpoint', async ({ req }) => {
   const body = (await req.json()) as { endpointId?: unknown }
   if (typeof body.endpointId !== 'string') {

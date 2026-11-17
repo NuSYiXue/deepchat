@@ -7,7 +7,11 @@
  */
 import { useMemo } from 'react'
 import { useConfig, DEFAULT_PERSONA_ID, resolveModel } from '../../services/server/config.js'
-import { setPendingModel, setPendingPersona, usePendingSelection } from '../../services/chat/drafts.js'
+import {
+  setPendingModel,
+  setPendingPersona,
+  usePendingSelection,
+} from '../../services/chat/drafts.js'
 import { setSessionModel, setSessionPersona, useChatStore } from '../../services/chat/store.js'
 import { useTranslate } from '../../i18n/index.js'
 import { Select, type SelectOption } from '../base/Select.js'
@@ -31,16 +35,20 @@ export const ChatModelSelect = ({ sessionId }: { sessionId: string | null }) => 
     const builtinEndpointIds = new Set(
       endpoints.filter((endpoint) => endpoint.builtin).map((endpoint) => endpoint.id)
     )
-    return models.map((model) =>
-      builtinEndpointIds.has(model.endpointId)
-        ? { value: model.id, label: t('settingsBuiltinDeepSeek') }
-        : { value: model.id, label: model.name || model.model }
-    )
+    // 关闭的模型不出现在这里
+    return models
+      .filter((model) => model.enabled)
+      .map((model) =>
+        builtinEndpointIds.has(model.endpointId)
+          ? { value: model.id, label: t('settingsBuiltinDeepSeek') }
+          : { value: model.id, label: model.name || model.model }
+      )
   }, [models, endpoints, t])
   // 新对话用待创建的选择，已有会话看会话自身
-  const current = sessionId === null
-    ? (resolveModel(pending)?.id ?? '')
-    : (resolveModel(session?.modelId)?.id ?? '')
+  const current =
+    sessionId === null
+      ? (resolveModel(pending)?.id ?? '')
+      : (resolveModel(session?.modelId)?.id ?? '')
 
   if (models.length === 0) {
     return null
@@ -82,9 +90,10 @@ export const ChatPersonaSelect = ({ sessionId }: { sessionId: string | null }) =
     () => personas.map((persona) => ({ value: persona.id, label: persona.name })),
     [personas]
   )
-  const current = sessionId === null
-    ? (pending ?? DEFAULT_PERSONA_ID)
-    : (session?.personaId ?? DEFAULT_PERSONA_ID)
+  const current =
+    sessionId === null
+      ? (pending ?? DEFAULT_PERSONA_ID)
+      : (session?.personaId ?? DEFAULT_PERSONA_ID)
   const locked = sessionId !== null && (session?.messages.length ?? 0) > 0
 
   if (personas.length === 0) {

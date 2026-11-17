@@ -265,9 +265,14 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     maxOutput?: number
     nativeSearch?: boolean
   } => {
-    const selectById = db.prepare(`select * from models where id = ?`)
-    const selectByName = db.prepare(`select * from models where model = ? order by is_default desc limit 1`)
-    const selectDefault = db.prepare(`select * from models order by is_default desc, position limit 1`)
+    // 只考虑启用的模型：关闭的模型不参与任何自动选择
+    const selectById = db.prepare(`select * from models where id = ? and enabled = 1`)
+    const selectByName = db.prepare(
+      `select * from models where model = ? and enabled = 1 order by is_default desc limit 1`
+    )
+    const selectDefault = db.prepare(
+      `select * from models where enabled = 1 order by is_default desc, position limit 1`
+    )
 
     const row = (
       modelId
@@ -284,7 +289,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         }
       | undefined
     if (!row) {
-      throw new HttpError(400, 'no model configured')
+      throw new HttpError(400, 'no enabled model configured')
     }
     let reasoning: ReasoningEfforts | undefined
     if (typeof row.reasoning === 'string') {
@@ -482,6 +487,54 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         throw new HttpError(response.status, await response.text().catch(() => response.statusText))
       }
       return { ok: true, models: await response.json().catch(() => null) }
+    },
+
+    /**
+     * 按模型测试连通性：发一次最小的真实请求，确认这个模型能出结果。
+     *
+     * 端点级测试只验证密钥与地址，说明不了某个模型是否可用——同一端点上
+     * 不同模型的名字、权限、能力都可能不同。这里用最短的 messages 请求
+     * （1 token 输出、无工具、无思考），读到响应即视为可用。
+     */
+    testModel: async (modelId: string): Promise<{ ok: true; latencyMs: number }> => {
+      const { endpoint, model } = resolveEndpoint(modelId)
+      if (!endpoint.api_key) {
+        throw new HttpError(400, `endpoint "${endpoint.name}" has no API key`)
+      }
+      const base = endpoint.origin.replace(/\/+$/, '')
+      const isOpenAI = endpoint.dialect === 'openai'
+      const target = isOpenAI
+        ? `${base}/v1/chat/completions`
+        : `${base}/anthropic/v1/messages`
+
+      const started = Date.now()
+      const response = await fetch(target, {
+        method: 'POST',
+        headers: isOpenAI
+          ? { 'content-type': 'application/json', authorization: `Bearer ${endpoint.api_key}` }
+          : {
+              'content-type': 'application/json',
+              'x-api-key': endpoint.api_key,
+              authorization: `Bearer ${endpoint.api_key}`,
+            },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'hi' }],
+          ...(isOpenAI ? { stream: false } : { stream: true }),
+        }),
+        signal: AbortSignal.timeout(15_000),
+      }).catch((error: unknown) => {
+        throw new HttpError(502, `request failed: ${String(error)}`)
+      })
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '')
+        throw new HttpError(response.status, detail || response.statusText)
+      }
+      // 响应头已到即可确认可用，不必读完整个流
+      await response.body?.cancel().catch(() => {})
+      return { ok: true, latencyMs: Date.now() - started }
     },
 
     /**

@@ -25,7 +25,9 @@ import {
   listEndpointModels,
   saveEndpoint,
   saveModel,
+  setModelEnabled,
   testEndpoint,
+  testModel,
   useConfig,
   type Endpoint,
   REASONING_LEVELS,
@@ -33,7 +35,7 @@ import {
 } from '../../services/server/config.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
-import { IconChevronDownOutline14, IconTrashOutline16 } from '../base/icons.js'
+import { IconChevronDownOutline14, IconLinkOutline16, IconTrashOutline16 } from '../base/icons.js'
 import styles from './ModelSettings.module.css'
 
 const DIALECTS = ['deepseek', 'anthropic', 'openai'] as const
@@ -82,9 +84,16 @@ const emptyModel = (endpointId: string): ModelConfig => ({
   reasoning: {},
   isDefault: false,
   nativeSearch: false,
+  enabled: true,
 })
 
-type Run = (action: () => Promise<void>) => Promise<void>
+/**
+ * 执行一次可能失败的异步操作。
+ *
+ * silent 为 true 时不弹「已保存」——用于测试连接这类不写数据的动作，
+ * 否则会和动作自己的结果提示叠在一起。
+ */
+type Run = (action: () => Promise<void>, silent?: boolean) => Promise<void>
 
 export const ModelSettings = () => {
   const t = useTranslate()
@@ -94,12 +103,14 @@ export const ModelSettings = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const run: Run = async (action) => {
+  const run: Run = async (action, silent = false) => {
     setBusy(true)
     setError(null)
     try {
       await action()
-      showToast({ key: 'settingsSaved' })
+      if (!silent) {
+        showToast({ key: 'settingsSaved' })
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -346,7 +357,7 @@ const ProviderEditor = ({
                 void run(async () => {
                   await testEndpoint(endpoint.id)
                   showToast({ key: 'settingsTestOk' })
-                })
+                }, true)
               }
             >
               {t('settingsTest')}
@@ -382,6 +393,22 @@ const ProviderEditor = ({
                     aria-label={t('settingsModelUpstream')}
                     title={model.model}
                   />
+                  {/* 测试连接按模型进行：同一端点的不同模型可用性并不相同 */}
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    aria-label={`${t('settingsTest')} ${model.model}`}
+                    title={t('settingsTest')}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const ms = await testModel(model.id)
+                        showToast({ key: 'settingsTestOkMs', params: { ms: String(ms) } })
+                      }, true)
+                    }
+                  >
+                    <IconLinkOutline16 />
+                  </button>
                   <button
                     type="button"
                     className={styles.iconButton}
@@ -405,6 +432,19 @@ const ProviderEditor = ({
                     onClick={() => void run(() => deleteModel(model.id))}
                   >
                     <IconTrashOutline16 />
+                  </button>
+                  {/* 启用开关：关闭后不在聊天下拉出现，也不参与任何自动选择 */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={model.enabled}
+                    aria-label={`${t('settingsModelEnabled')} ${model.model}`}
+                    title={t('settingsModelEnabled')}
+                    className={clsx(styles.switch, model.enabled && styles.switchOn)}
+                    disabled={busy}
+                    onClick={() => void run(() => setModelEnabled(model, !model.enabled), true)}
+                  >
+                    <span className={styles.switchKnob} />
                   </button>
                   <input
                     className={styles.modelNameInput}
@@ -512,7 +552,10 @@ const ModelFields = ({
             spellCheck={false}
             onChange={(e) => onChange({ ...value, model: e.target.value })}
           />
-          <ModelPicker endpointId={value.endpointId} onPick={(id) => onChange({ ...value, model: id })} />
+          <ModelPicker
+            endpointId={value.endpointId}
+            onPick={(id) => onChange({ ...value, model: id })}
+          />
         </div>
       </Field>
       <Field label={t('settingsModelName')}>
@@ -653,8 +696,7 @@ const ApiKeyInput = ({
 
 const EYE_CONTOUR =
   'M1.5 8C2.9 5.25 5.25 3.5 8 3.5C10.75 3.5 13.1 5.25 14.5 8C13.1 10.75 10.75 12.5 8 12.5C5.25 12.5 2.9 10.75 1.5 8Z'
-const EYE_PUPIL =
-  'M10 8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8Z'
+const EYE_PUPIL = 'M10 8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8Z'
 
 const EyeIcon = ({ off }: { off: boolean }) => (
   <svg
@@ -752,8 +794,8 @@ const ReasoningEditor = ({
       <div className={styles.reasoningHead}>
         <span className={styles.fieldLabel}>{t('settingsReasoning')}</span>
         <button
-          type='button'
-          role='switch'
+          type="button"
+          role="switch"
           aria-checked={enabled}
           aria-label={t('settingsReasoning')}
           className={clsx(styles.switch, enabled && styles.switchOn)}

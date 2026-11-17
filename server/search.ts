@@ -31,16 +31,23 @@ type EndpointRow = {
   dialect: string
 }
 
-/** 找到一个声明了原生搜索的模型及其端点，优先 deepseek 方言（结果带明文摘要） */
-const findSearchEndpoint = (
+/**
+ * 找兜底搜索用的模型：**只从内置的 DeepSeek 官方端点里挑**。
+ *
+ * 自定义端点的「原生联网搜索」只服务它自己的模型——只有那个模型被选中、
+ * 且开了搜索时，才由它自己搜。它不替别的模型兜底：否则关掉一个自定义模型后
+ * 它仍可能被借去搜索，行为难以预料，用量也会记到用户没预期的端点上。
+ */
+const findFallbackSearchModel = (
   db: DatabaseSync
 ): { endpoint: EndpointRow; model: string } | undefined => {
   const rows = db
     .prepare(
       `select e.*, m.model as model_name from models m
        join endpoints e on e.id = m.endpoint_id
-       where m.native_search = 1
-       order by (e.dialect = 'deepseek') desc`
+       where m.native_search = 1 and e.builtin = 1
+       order by m.is_default desc, m.position
+       limit 1`
     )
     .all() as (EndpointRow & { model_name: string })[]
   const row = rows[0]
@@ -58,9 +65,9 @@ export const relaySearch = async (
   query: string,
   signal?: AbortSignal
 ): Promise<SearchHit[]> => {
-  const found = findSearchEndpoint(db)
+  const found = findFallbackSearchModel(db)
   if (!found) {
-    throw new HttpError(400, 'no model with native web search configured')
+    throw new HttpError(400, 'the built-in DeepSeek endpoint has no model with native search')
   }
   const endpoint = found.endpoint
   const base = endpoint.origin.replace(/\/+$/, '')

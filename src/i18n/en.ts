@@ -1,6 +1,8 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsModelEnabled: 'Enable this model',
+  settingsTestOkMs: 'Connection OK ({ms} ms)',
   settingsInputTypeDocument: 'Document',
   settingsInputTypeImage: 'Image',
   settingsInputTypeText: 'Text',
