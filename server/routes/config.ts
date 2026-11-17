@@ -121,8 +121,8 @@ const upsertModel = (
   }
   db.prepare(
     `insert into models
-       (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(id) do update set
        endpoint_id = excluded.endpoint_id,
        name = excluded.name,
@@ -132,7 +132,8 @@ const upsertModel = (
        max_output = excluded.max_output,
        reasoning = excluded.reasoning,
        is_default = excluded.is_default,
-       position = excluded.position`
+       position = excluded.position,
+       native_search = excluded.native_search`
   ).run(
     body.id,
     body.endpointId,
@@ -141,9 +142,10 @@ const upsertModel = (
     JSON.stringify(Array.isArray(body.inputTypes) ? body.inputTypes : ['text']),
     typeof body.maxContext === 'number' ? Math.trunc(body.maxContext) : 64000,
     typeof body.maxOutput === 'number' ? Math.trunc(body.maxOutput) : 8192,
-    JSON.stringify(body.reasoning ?? { kind: 'none' }),
+    JSON.stringify(body.reasoning ?? {}),
     body.isDefault === true ? 1 : 0,
-    typeof body.position === 'number' ? Math.trunc(body.position) : 0
+    typeof body.position === 'number' ? Math.trunc(body.position) : 0,
+    body.nativeSearch === true ? 1 : 0
   )
   if (body.isDefault === true) {
     db.prepare(`update models set is_default = 0 where id <> ?`).run(body.id)
@@ -188,6 +190,7 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
       maxContext: row.max_context,
       maxOutput: row.max_output,
       reasoning: normalizeEfforts(JSON.parse(row.reasoning as string)) ?? {},
+      nativeSearch: row.native_search === 1,
       isDefault: row.is_default === 1,
     })),
     settings: Object.fromEntries(

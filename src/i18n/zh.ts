@@ -1,4 +1,7 @@
 export const zh = {
+  settingsInputTypeDocument: '文档',
+  settingsInputTypeImage: '图片',
+  settingsInputTypeText: '文本',
   settingsBuiltinDeepSeek: 'DeepSeek 官方',
   settingsAvailableModels: '可用模型',
   settingsFetchModelsEmpty: '端点没有返回模型列表，请手动填写',
@@ -69,7 +72,7 @@ export const zh = {
   settingsTest: '测试连接',
   settingsTestOk: '连接正常',
   settingsSaved: '已保存',
-  settingsNativeSearch: '该端点支持原生联网搜索',
+  settingsNativeSearch: '该模型支持原生联网搜索',
   edit: '编辑',
   welcomeMessageChat250808: '今天有什么可以帮到你？',
   contentCaveat: '内容由 AI 生成，请仔细甄别',

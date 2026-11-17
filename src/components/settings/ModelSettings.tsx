@@ -39,13 +39,19 @@ import styles from './ModelSettings.module.css'
 const DIALECTS = ['deepseek', 'anthropic', 'openai'] as const
 const INPUT_TYPES = ['text', 'image', 'document'] as const
 
+/** 输入类型对应的文案 key */
+const INPUT_TYPE_LABELS = {
+  text: 'settingsInputTypeText',
+  image: 'settingsInputTypeImage',
+  document: 'settingsInputTypeDocument',
+} as const
+
 type EndpointDraft = {
   id: string
   name: string
   origin: string
   apiKey: string
   dialect: string
-  nativeWebSearch: boolean
 }
 
 const emptyEndpoint = (): EndpointDraft => ({
@@ -54,7 +60,6 @@ const emptyEndpoint = (): EndpointDraft => ({
   origin: 'https://api.deepseek.com',
   apiKey: '',
   dialect: 'deepseek',
-  nativeWebSearch: false,
 })
 
 const draftFrom = (endpoint: Endpoint): EndpointDraft => ({
@@ -63,7 +68,6 @@ const draftFrom = (endpoint: Endpoint): EndpointDraft => ({
   origin: endpoint.origin,
   apiKey: '',
   dialect: endpoint.dialect,
-  nativeWebSearch: endpoint.capabilities.nativeWebSearch === true,
 })
 
 const emptyModel = (endpointId: string): ModelConfig => ({
@@ -74,8 +78,10 @@ const emptyModel = (endpointId: string): ModelConfig => ({
   inputTypes: ['text'],
   maxContext: 64000,
   maxOutput: 8192,
-  reasoning: { kind: 'none' },
+  // 空字典表示未开启推理等级
+  reasoning: {},
   isDefault: false,
+  nativeSearch: false,
 })
 
 type Run = (action: () => Promise<void>) => Promise<void>
@@ -251,7 +257,6 @@ const ProviderEditor = ({
         origin: draft.origin.trim(),
         ...(draft.apiKey ? { apiKey: draft.apiKey } : {}),
         dialect: draft.dialect,
-        capabilities: { nativeWebSearch: draft.nativeWebSearch },
       })
       setLocalDraft(null)
       onSaved?.()
@@ -324,17 +329,6 @@ const ProviderEditor = ({
             />
           </Field>
         </div>
-      )}
-
-      {builtin ? null : (
-        <label className={styles.checkboxItem}>
-          <input
-            type="checkbox"
-            checked={draft?.nativeWebSearch ?? false}
-            onChange={(e) => draft && setDraft({ ...draft, nativeWebSearch: e.target.checked })}
-          />
-          {t('settingsNativeSearch')}
-        </label>
       )}
 
       <EditorFooter
@@ -556,13 +550,25 @@ const ModelFields = ({
                 checked={value.inputTypes.includes(type)}
                 onChange={() => toggleInput(type)}
               />
-              {type}
+              {t(INPUT_TYPE_LABELS[type])}
             </label>
           ))}
         </div>
       </fieldset>
 
       {builtin ? null : <ReasoningEditor value={value} onChange={onChange} />}
+
+      {/* 原生联网搜索是模型能力：不同模型的工具支持并不相同 */}
+      {builtin ? null : (
+        <label className={styles.checkboxItem}>
+          <input
+            type="checkbox"
+            checked={value.nativeSearch}
+            onChange={(e) => onChange({ ...value, nativeSearch: e.target.checked })}
+          />
+          {t('settingsNativeSearch')}
+        </label>
+      )}
 
       {/* 默认模型是全局唯一的：用一个明确的按钮表达，而不是一个可勾选的框 */}
       <div className={styles.defaultRow}>

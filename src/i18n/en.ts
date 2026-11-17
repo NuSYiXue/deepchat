@@ -1,6 +1,9 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsInputTypeDocument: 'Document',
+  settingsInputTypeImage: 'Image',
+  settingsInputTypeText: 'Text',
   settingsBuiltinDeepSeek: 'DeepSeek official',
   settingsAvailableModels: 'Available models',
   settingsFetchModelsEmpty: 'The endpoint returned no models; enter one manually',
@@ -71,7 +74,7 @@ export const en = {
   settingsTest: 'Test',
   settingsTestOk: 'Connection OK',
   settingsSaved: 'Saved',
-  settingsNativeSearch: 'This endpoint supports native web search',
+  settingsNativeSearch: 'This model supports native web search',
   edit: 'Edit',
   welcomeMessageChat250808: 'How can I help you?',
   contentCaveat: 'AI-generated, for reference only',

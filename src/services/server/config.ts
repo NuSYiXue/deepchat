@@ -46,6 +46,8 @@ export type ModelConfig = {
   maxOutput: number
   reasoning: ReasoningEfforts
   isDefault: boolean
+  /** 该模型在服务端支持原生联网搜索 */
+  nativeSearch: boolean
 }
 
 /** 内置默认人设的 id，与服务端一致 */

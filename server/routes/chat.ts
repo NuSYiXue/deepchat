@@ -27,7 +27,6 @@ export type Capabilities = {
   safetyCheck: boolean
   titleExtension: boolean
   thinkingLevel: boolean
-  nativeWebSearch: boolean
   filesApi: boolean
 }
 
@@ -38,7 +37,6 @@ const DEFAULT_CAPABILITIES: Capabilities = {
   safetyCheck: true,
   titleExtension: true,
   thinkingLevel: false,
-  nativeWebSearch: false,
   filesApi: true,
 }
 
@@ -56,7 +54,6 @@ const capabilitiesFor = (row: EndpointRow): Capabilities => {
       safetyCheck: false,
       titleExtension: false,
       thinkingLevel: false,
-      nativeWebSearch: false,
       filesApi: false,
       ...parsed,
     }
@@ -266,6 +263,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     reasoning?: ReasoningEfforts
     maxContext?: number
     maxOutput?: number
+    nativeSearch?: boolean
   } => {
     const selectById = db.prepare(`select * from models where id = ?`)
     const selectByName = db.prepare(`select * from models where model = ? order by is_default desc limit 1`)
@@ -276,7 +274,14 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         ? ((selectById.get(modelId) ?? selectByName.get(modelId)) as unknown)
         : (selectDefault.get() ?? undefined)
     ) as
-      | { endpoint_id: string; model: string; reasoning?: string; max_context?: number; max_output?: number }
+      | {
+          endpoint_id: string
+          model: string
+          reasoning?: string
+          max_context?: number
+          max_output?: number
+          native_search?: number
+        }
       | undefined
     if (!row) {
       throw new HttpError(400, 'no model configured')
@@ -295,6 +300,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       reasoning,
       maxContext: typeof row.max_context === 'number' ? row.max_context : undefined,
       maxOutput: typeof row.max_output === 'number' ? row.max_output : undefined,
+      nativeSearch: row.native_search === 1,
     }
   }
 
@@ -308,6 +314,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         reasoning: modelConfig,
         maxContext,
         maxOutput,
+        nativeSearch,
       } = resolveEndpoint(modelId)
       if (!endpoint.api_key) {
         throw new HttpError(400, `endpoint "${endpoint.name}" has no API key`)
@@ -337,7 +344,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
 
       // 搜索回落：模型端点自己没有原生搜索能力时，先借用支持搜索的端点查一次，
       // 把结果作为文本注入本轮提问。回答仍由当前模型给出。
-      if (body.search && !capabilities.nativeWebSearch) {
+      if (body.search && !nativeSearch) {
         const query = body.searchQuery ?? lastUserText(body.messages)
         if (query) {
           const hits = await relaySearch(db, query, req.signal).catch(() => [])

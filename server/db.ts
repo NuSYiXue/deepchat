@@ -71,9 +71,11 @@ create table if not exists models (
   input_types text not null default '["text"]',
   max_context integer not null default 64000,
   max_output  integer not null default 8192,
-  reasoning   text not null default '{"kind":"none"}',
+  reasoning   text not null default '{}',
   is_default  integer not null default 0,
-  position    integer not null default 0
+  position    integer not null default 0,
+  -- 1 表示该模型在服务端支持原生联网搜索
+  native_search integer not null default 0
 );
 
 create table if not exists files (
@@ -150,6 +152,18 @@ const migrate = (db: DatabaseSync): void => {
   const endpoints = columnsOf(db, 'endpoints')
   if (!endpoints.has('builtin')) {
     db.exec(`alter table endpoints add column builtin integer not null default 0`)
+  }
+
+  const models = columnsOf(db, 'models')
+  if (!models.has('native_search')) {
+    db.exec(`alter table models add column native_search integer not null default 0`)
+    // 旧数据把能力记在端点层：把它迁移到该端点下的所有模型
+    db.exec(`
+      update models set native_search = 1
+      where endpoint_id in (
+        select id from endpoints where capabilities like '%"nativeWebSearch":true%'
+      )
+    `)
   }
 }
 

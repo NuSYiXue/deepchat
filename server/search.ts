@@ -31,18 +31,20 @@ type EndpointRow = {
   dialect: string
 }
 
-const parseCapabilities = (raw: string): Record<string, boolean> => {
-  try {
-    return JSON.parse(raw) as Record<string, boolean>
-  } catch {
-    return {}
-  }
-}
-
-/** 找到一个支持原生搜索的端点，优先 deepseek 方言（其搜索结果带明文摘要） */
-const findSearchEndpoint = (db: DatabaseSync): EndpointRow | undefined => {
-  const rows = db.prepare(`select * from endpoints`).all() as EndpointRow[]
-  return rows.find((row) => parseCapabilities((row as unknown as { capabilities: string }).capabilities ?? '{}').nativeWebSearch)
+/** 找到一个声明了原生搜索的模型及其端点，优先 deepseek 方言（结果带明文摘要） */
+const findSearchEndpoint = (
+  db: DatabaseSync
+): { endpoint: EndpointRow; model: string } | undefined => {
+  const rows = db
+    .prepare(
+      `select e.*, m.model as model_name from models m
+       join endpoints e on e.id = m.endpoint_id
+       where m.native_search = 1
+       order by (e.dialect = 'deepseek') desc`
+    )
+    .all() as (EndpointRow & { model_name: string })[]
+  const row = rows[0]
+  return row ? { endpoint: row, model: row.model_name } : undefined
 }
 
 /**
@@ -56,10 +58,11 @@ export const relaySearch = async (
   query: string,
   signal?: AbortSignal
 ): Promise<SearchHit[]> => {
-  const endpoint = findSearchEndpoint(db)
-  if (!endpoint) {
-    throw new HttpError(400, 'no endpoint with native web search configured')
+  const found = findSearchEndpoint(db)
+  if (!found) {
+    throw new HttpError(400, 'no model with native web search configured')
   }
+  const endpoint = found.endpoint
   const base = endpoint.origin.replace(/\/+$/, '')
   const isDeepSeek = endpoint.dialect === 'deepseek'
 
@@ -76,7 +79,7 @@ export const relaySearch = async (
       authorization: `Bearer ${endpoint.api_key}`,
     },
     body: JSON.stringify({
-      model: isDeepSeek ? 'deepseek-flash' : undefined,
+      model: found.model,
       max_tokens: 1024,
       messages: [{ role: 'user', content: `搜索：${query}` }],
       tools,
