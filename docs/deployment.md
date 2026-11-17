@@ -14,22 +14,30 @@
 
 ## 一、启动
 
-推荐用 `.env` 文件固化配置：`docker-compose.yml` 里的 `APP_PASSWORD` 用了
-`:?` 必填校验，只靠 `export` 的话，之后每一条 `docker compose` 子命令
-（包括 `ps`、`logs`）都必须在同一 shell 里带着这些变量，否则直接报
-`required variable APP_PASSWORD is missing a value`。
+镜像由 GitHub Actions 自动构建，推到 GitHub Container Registry（GHCR）。
+`docker-compose.yml` 默认拉 `ghcr.io/<owner>/<repo>:latest`；仓库名与默认值不同时
+在 `.env` 里设 `DEEPCHAT_IMAGE` 覆盖：
 
 ```sh
 cat > .env <<EOF
 APP_PASSWORD=$(openssl rand -base64 24)
 DEEPSEEK_API_KEY=sk-你的key
-DATA_DIR=/data
-PORT=3000
+DEEPCHAT_IMAGE=ghcr.io/你的用户名/你的仓库名:latest
 EOF
 
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f
 ```
+
+如果 GHCR 上的包是私有的，先登录一次：
+
+```sh
+echo <你的 GitHub PAT> | docker login ghcr.io -u <你的用户名> --password-stdin
+```
+
+不想用预构建镜像、要跑本地源码时，取消 `docker-compose.yml` 里 `build: .` 的注释，
+然后 `docker compose up -d --build`。
 
 首次启动会在 `./data/` 下生成：
 
@@ -131,18 +139,30 @@ proxy_set_header X-Forwarded-Proto $scheme;
 ```sh
 # 备份（服务运行时也可执行；WAL 模式下单拷 app.db 可能不完整）
 docker compose stop
-tar czf chat-demo-backup-$(date +%F).tar.gz data/
+tar czf deepchat-backup-$(date +%F).tar.gz data/
 docker compose start
 
 # 恢复
 docker compose down
-tar xzf chat-demo-backup-YYYY-MM-DD.tar.gz
+tar xzf deepchat-backup-YYYY-MM-DD.tar.gz
 docker compose up -d
 ```
 
 也可以在应用内「设置 → 数据管理 → 导出」生成 ZIP 归档（不含 API Key 与设置）。
 
 ## 六、升级
+
+镜像由 CI 自动构建，升级只需重新拉取：
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+`latest` 标签跟随 main 分支最新一次构建。想固定版本，把 `DEEPCHAT_IMAGE` 指向
+某个 tag（如 `:v0.2.0`）或某个 commit（如 `:sha-abc1234`），再 `docker compose pull`。
+
+跑本地源码时则用：
 
 ```sh
 git pull

@@ -1,15 +1,23 @@
-# chat-demo
+# DeepChat
 
 English | [简体中文](README.zh-CN.md)
 
-A chat UI for DeepSeek-compatible APIs, packaged as a small self-hosted server. One Node process serves the static frontend and the API; any browser on your network (or behind your own reverse proxy) can use it, and conversations stay in one place instead of being scattered across browser profiles.
+> **This is a fork.** DeepChat is derived from [deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo),
+> which is MIT-licensed and Copyright (c) 2026 DeepSeek. The upstream project is a
+> browser-only static demo; this fork adds a Node server so the app can be self-hosted
+> and shared across devices. See [License](#license) for details.
 
-Compared with the original static demo, this fork adds a backend so that:
+DeepChat is a chat UI for DeepSeek-compatible APIs, packaged as a small self-hosted server.
+One Node process serves the static frontend and the API; any browser on your network
+(or behind your own reverse proxy) can use it, and conversations stay in one place
+instead of being scattered across browser profiles.
 
-- conversations, attachments, and settings live in SQLite on the server, not in IndexedDB per browser;
-- API keys stay on the server and never reach the browser;
-- multiple devices share the same data with no sync step;
-- you can register several endpoints and models, not just the official DeepSeek one.
+What this fork changes relative to upstream:
+
+- Conversations, attachments, and settings live in SQLite on the server instead of IndexedDB per browser.
+- API keys stay on the server and never reach the browser.
+- Multiple devices share the same data with no sync step.
+- You can register several endpoints and models, not just the official DeepSeek one.
 
 ## Features
 
@@ -23,18 +31,40 @@ Compared with the original static demo, this fork adds a backend so that:
 - **Per-model reasoning**: the built-in DeepSeek endpoint keeps the original deep-thinking toggle; custom-endpoint models use their own reasoning level setting instead.
 - **Search**: a model can declare native web search, and the built-in DeepSeek endpoint can backstop search for models that lack it.
 
-## Getting started
+## Quick start (Docker)
+
+Images are built by GitHub Actions and published to GitHub Container Registry.
+
+```sh
+cat > .env <<EOF
+APP_PASSWORD=$(openssl rand -base64 24)
+DEEPSEEK_API_KEY=sk-your-key
+DEEPCHAT_IMAGE=ghcr.io/<your-username>/<your-repo>:latest
+EOF
+
+docker compose pull
+docker compose up -d
+```
+
+Open <http://localhost:3000> and log in with `APP_PASSWORD`.
+
+If the GHCR package is private, log in once first:
+
+```sh
+echo <your-github-pat> | docker login ghcr.io -u <your-username> --password-stdin
+```
+
+## Quick start (from source)
 
 Requires Node.js 24 or newer (the server runs TypeScript directly via native type stripping) and pnpm.
 
 ```sh
-git clone <your fork>
-cd chat-demo
 pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts the API server on port 3000 and the frontend dev server on <http://localhost:8090>, with `/api` proxied to the backend. Open <http://localhost:8090>.
+`pnpm dev` starts the API server on port 3000 and the frontend dev server on
+<http://localhost:8090>, with `/api` proxied to the backend. Open <http://localhost:8090>.
 
 To run the production build locally:
 
@@ -46,7 +76,8 @@ This builds `dist/` and starts the server on <http://localhost:3000>.
 
 ## Configuration
 
-Settings come from environment variables. For local development you can put them in `.env`; Docker Compose reads that file automatically.
+Settings come from environment variables. For local development you can put them in `.env`;
+Docker Compose reads that file automatically.
 
 | Variable | Purpose |
 | --- | --- |
@@ -56,8 +87,10 @@ Settings come from environment variables. For local development you can put them
 | `DEEPSEEK_API_KEY` | Used **only on first start** to seed the built-in endpoint and its default model. Later changes made in the UI are never overwritten. |
 | `API_ORIGIN` | Optional: origin for the seeded endpoint instead of `https://api.deepseek.com`. |
 | `API_MODEL` | Optional: default model name for the seeded endpoint instead of `deepseek-flash`. |
+| `DEEPCHAT_IMAGE` | Docker only: image to run. Defaults to `ghcr.io/nusyixue/deepchat:latest`. |
 
-The server always listens on plain HTTP and does not terminate TLS. Put a reverse proxy in front for public HTTPS access.
+The server always listens on plain HTTP and does not terminate TLS. Put a reverse proxy
+in front for public HTTPS access.
 
 ## Data and storage
 
@@ -69,24 +102,23 @@ Everything lives under `DATA_DIR`:
 | `files/` | Attachment originals |
 | `secret` | Cookie signing key. Losing it logs every device out. |
 
-Back up by copying the whole directory while the service is stopped, or use the in-app export (ZIP archive without API keys or settings).
+Back up by copying the whole directory while the service is stopped, or use the in-app
+export (ZIP archive without API keys or settings).
 
-Settings → Data → Delete all chats clears every conversation and attachment after confirmation. Endpoints, models, personas, and the access password are preserved.
+Settings → Data → Delete all chats clears every conversation and attachment after
+confirmation. Endpoints, models, personas, and the access password are preserved.
 
-## Deployment
+## Deployment notes
 
-Docker is the intended path:
+See [docs/deployment.md](docs/deployment.md) (Chinese) for the reverse-proxy checklist,
+streaming caveats, backup/restore, and a list of verified environments.
 
-```sh
-cat > .env <<EOF
-APP_PASSWORD=$(openssl rand -base64 24)
-DEEPSEEK_API_KEY=sk-your-key
-EOF
+The two settings people most often miss behind a reverse proxy:
 
-docker compose up -d --build
+```nginx
+proxy_buffering off;          # without this, replies arrive in one burst instead of streaming
+client_max_body_size 100m;    # without this, attachment uploads fail with 413
 ```
-
-See [docs/deployment.md](docs/deployment.md) (Chinese) for the reverse-proxy checklist, streaming caveats, backup/restore, and a list of verified environments.
 
 ## Development
 
@@ -120,8 +152,24 @@ src/
 scripts/dev.mjs         Development launcher (backend + dev server)
 ```
 
-The frontend speaks the Anthropic Messages protocol with DeepSeek's private extensions (`latest_reminder`, `safety_check`, `title`, `deepseek_web_search`, `deepseek_read_url`). OpenAI-dialect endpoints are translated to and from that protocol on the server, so the UI never needs to know which upstream it is talking to.
+The frontend speaks the Anthropic Messages protocol with DeepSeek's private extensions
+(`latest_reminder`, `safety_check`, `title`, `deepseek_web_search`, `deepseek_read_url`).
+OpenAI-dialect endpoints are translated to and from that protocol on the server, so the
+UI never needs to know which upstream it is talking to.
+
+### CI
+
+- `.github/workflows/ci.yml` — type check, lint, build, and a server smoke test on every push and PR.
+- `.github/workflows/docker.yml` — builds and pushes the container image to GHCR on `main` and on `v*` tags.
 
 ## License
 
-[MIT](LICENSE). The build copies the license to `dist/LICENSE`; include it when distributing the app. Third-party dependencies are subject to their own licenses.
+MIT. This project is a derivative work of
+[deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo):
+
+> MIT License — Copyright (c) 2026 DeepSeek
+
+The original copyright notice is retained in [LICENSE](LICENSE) as required by the MIT
+License. Modifications and additions in this fork are released under the same MIT terms.
+The build copies the license to `dist/LICENSE`; include it when distributing the app.
+Third-party dependencies are subject to their own licenses.

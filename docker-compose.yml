@@ -1,8 +1,13 @@
 services:
-  chat-demo:
-    build: .
-    image: chat-demo:server
-    container_name: chat-demo
+  deepchat:
+    # 默认拉取 GitHub Container Registry 上的最新镜像：.github/workflows/docker.yml
+    # 在 main 分支每次推送时自动构建并打 latest 标签。
+    # 仓库名与你的 fork 不一致时，在 .env 里覆盖：
+    #   DEEPCHAT_IMAGE=ghcr.io/你的用户名/你的仓库名:latest
+    # 想改本地源码调试，用 `docker compose up -d --build` 并在下面取消 build 注释。
+    image: "${DEEPCHAT_IMAGE:-ghcr.io/nusyixue/deepchat:latest}"
+    # build: .
+    container_name: deepchat
     restart: unless-stopped
     # 内网直连用；公网经 NPM 反代到同一端口，因此这里必须监听全部接口
     ports:

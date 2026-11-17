@@ -1,0 +1,62 @@
+name: Build image
+
+# 构建并推送容器镜像到 GitHub Container Registry（ghcr.io）。
+#
+# 用 GHCR 而不是 Docker Hub：仓库自带的 GITHUB_TOKEN 就能推送，不需要在仓库
+# 里额外配置账号密码。镜像名固定为 ghcr.io/<owner>/<repo>，标签见下方 meta。
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  # 允许在 Actions 页面手动触发一次构建（例如刚改完 workflow 想立刻验证）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 标签规则：分支构建打分支名与 short sha，tag 构建额外打版本号，
+      # 默认分支额外打 latest。compose 里引用 latest 即最新一次 main 构建。
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v5.10.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 同一份源码重复构建时命中缓存，省掉重新装依赖与打包
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
