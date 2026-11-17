@@ -119,6 +119,19 @@ const upsertModel = (
   if (owner?.builtin === 1) {
     throw new HttpError(400, 'models of the built-in endpoint are fixed')
   }
+
+  /**
+   * isDefault 缺省表示「保持不变」。
+   *
+   * 保存是整条覆盖写，若把缺省当成 false，任何一次编辑都会把默认标记清掉。
+   * 切换默认有专门的接口，这里只在显式传入时才改。
+   */
+  const current = db.prepare(`select is_default from models where id = ?`).get(body.id) as
+    | { is_default: number }
+    | undefined
+  const isDefault =
+    typeof body.isDefault === 'boolean' ? (body.isDefault ? 1 : 0) : (current?.is_default ?? 0)
+
   db.prepare(
     `insert into models
        (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search, enabled)
@@ -144,7 +157,7 @@ const upsertModel = (
     typeof body.maxContext === 'number' ? Math.trunc(body.maxContext) : 64000,
     typeof body.maxOutput === 'number' ? Math.trunc(body.maxOutput) : 8192,
     JSON.stringify(body.reasoning ?? {}),
-    body.isDefault === true ? 1 : 0,
+    isDefault,
     typeof body.position === 'number' ? Math.trunc(body.position) : 0,
     body.nativeSearch === true ? 1 : 0,
     body.enabled === false ? 0 : 1
