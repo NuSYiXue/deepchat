@@ -14,9 +14,18 @@
 
 ## 一、启动
 
+推荐用 `.env` 文件固化配置：`docker-compose.yml` 里的 `APP_PASSWORD` 用了
+`:?` 必填校验，只靠 `export` 的话，之后每一条 `docker compose` 子命令
+（包括 `ps`、`logs`）都必须在同一 shell 里带着这些变量，否则直接报
+`required variable APP_PASSWORD is missing a value`。
+
 ```sh
-# 生成一个强密码
-export APP_PASSWORD="$(openssl rand -base64 24)"
+cat > .env <<EOF
+APP_PASSWORD=$(openssl rand -base64 24)
+DEEPSEEK_API_KEY=sk-你的key
+DATA_DIR=/data
+PORT=3000
+EOF
 
 docker compose up -d --build
 docker compose logs -f
@@ -30,6 +39,12 @@ docker compose logs -f
 | `app.db-wal` / `app.db-shm` | WAL 模式日志，备份时一并拷贝 |
 | `files/` | 附件原件 |
 | `secret` | Cookie 签名密钥（**丢失会导致所有设备需要重新登录**） |
+
+`DEEPSEEK_API_KEY` 只在**首次启动**（端点表为空）时用于创建内置端点与默认模型；
+之后在界面里改过的配置不会被它覆盖。
+
+> `data/` 由容器内进程写入，宿主用户默认无权删除。需要重建数据时用
+> `sudo rm -rf data`，或 `docker compose down` 后再操作。
 
 ## 二、内网访问
 
@@ -147,3 +162,21 @@ docker compose up -d --build
 | 语音按钮灰 | 用 `http://<内网IP>` 访问，改成 HTTPS 或 `localhost` |
 | 重启后需要重新登录 | `data/secret` 丢失或被覆盖 |
 | 所有设备数据消失 | `data/` 卷未正确挂载 |
+
+## 八、已验证的环境
+
+以下在 Ubuntu 26.04 虚拟机（5.2G 内存、Docker 29.10.0、Compose v5.7.2）上实测通过：
+
+| 项 | 结果 |
+|---|---|
+| `docker compose build` | 成功，镜像约含 dist + server，无 node_modules |
+| 容器启动 | `listening on http://0.0.0.0:3000 (data: /data)` |
+| 首页 / 未登录 API | 200 / 401 |
+| 密码登录 | 200，Cookie 为 HttpOnly（`document.cookie` 读不到） |
+| 真实 DeepSeek 对话 | 200，流式返回，思考过程 133 字 |
+| 自动标题 | 由服务端 `title` 扩展生成，侧栏正确显示 |
+| 环境变量播种 | 首次启动自动建内置端点与默认模型 |
+| 重启容器 | 会话数据完好（`./data` 卷持久化） |
+| 多端同步 | 两套独立 Cookie 读写同一会话，双向可见 |
+| 跨机访问 | 从宿主 `http://<VM IP>:3000` 正常 |
+| 语音按钮 | 内网 HTTP 下置灰并提示原因（预期行为） |
