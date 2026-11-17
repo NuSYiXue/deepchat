@@ -411,12 +411,34 @@ const ProviderEditor = ({
                 data-expanded={expanded ? '' : undefined}
               >
                 <div className={styles.modelRow}>
+                  {/* 列序：模型 id / 展开 / 显示名 / 测试连接 / 删除 / 启用开关 */}
                   <input
                     className={styles.modelIdInput}
                     value={model.model}
                     readOnly
                     aria-label={t('settingsModelUpstream')}
                     title={model.model}
+                  />
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    aria-label={t('settingsModelAdvanced')}
+                    aria-expanded={expanded}
+                    title={t('settingsModelAdvanced')}
+                    onClick={() =>
+                      setModelDraft((current) => (current?.id === model.id ? null : model))
+                    }
+                  >
+                    <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
+                      <IconChevronDownOutline14 />
+                    </span>
+                  </button>
+                  <input
+                    className={styles.modelNameInput}
+                    value={model.name}
+                    readOnly
+                    aria-label={t('settingsModelName')}
+                    placeholder={t('settingsModelNamePlaceholder')}
                   />
                   {/* 测试连接按模型进行：同一端点的不同模型可用性并不相同 */}
                   <button
@@ -433,20 +455,6 @@ const ProviderEditor = ({
                     }
                   >
                     <IconLinkOutline16 />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    aria-label={t('settingsModelAdvanced')}
-                    aria-expanded={expanded}
-                    title={t('settingsModelAdvanced')}
-                    onClick={() =>
-                      setModelDraft((current) => (current?.id === model.id ? null : model))
-                    }
-                  >
-                    <span className={clsx(styles.chevron, expanded && styles.chevronOpen)}>
-                      <IconChevronDownOutline14 />
-                    </span>
                   </button>
                   <button
                     type="button"
@@ -471,13 +479,6 @@ const ProviderEditor = ({
                   >
                     <span className={styles.switchKnob} />
                   </button>
-                  <input
-                    className={styles.modelNameInput}
-                    value={model.name}
-                    readOnly
-                    aria-label={t('settingsModelName')}
-                    placeholder={t('settingsModelNamePlaceholder')}
-                  />
                 </div>
 
                 {expanded && modelDraft ? (

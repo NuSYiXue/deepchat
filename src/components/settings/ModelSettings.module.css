@@ -388,10 +388,10 @@
 }
 
 /* 网格列序与 DSH 一致：模型 id / 展开 / 删除 / 显示名 */
-/* 列序：模型 id / 测试 / 展开 / 删除 / 显示名 / 启用开关 */
+/* 列序：模型 id / 展开 / 显示名 / 测试 / 删除 / 启用开关 */
 .modelRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 6px;
 }
