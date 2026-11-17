@@ -4,7 +4,7 @@
  * 前端只认 Anthropic SSE，因此 OpenAI 端点的响应必须在这里翻译回同一套事件，
  * 这样 parseEvent.ts 与 UI 完全不用知道上游是谁。
  */
-import type { ChatRequestBody } from './chat.js'
+import type { ChatRequestBody } from './chat.ts'
 
 /** Anthropic messages → OpenAI messages；system 提到首条 */
 export const toOpenAIMessages = (body: ChatRequestBody): unknown[] => {

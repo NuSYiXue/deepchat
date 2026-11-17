@@ -881,6 +881,8 @@ const ModelFetcher = ({
   const [loading, setLoading] = useState(false)
   const [candidates, setCandidates] = useState<{ id: string; name: string | null }[]>([])
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  /** 候选过滤词：同时匹配模型 id 与显示名 */
+  const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   /** 已存在的模型 id：这些在面板里默认勾选 */
@@ -925,6 +927,40 @@ const ModelFetcher = ({
     })
   }
 
+  /** 过滤后的候选：空查询时全部显示 */
+  const visible = candidates.filter((item) => {
+    const q = query.trim().toLowerCase()
+    if (q === '') {
+      return true
+    }
+    return item.id.toLowerCase().includes(q) || (item.name ?? '').toLowerCase().includes(q)
+  })
+
+  /**
+   * 全选/取消全选只作用于**可见**候选。
+   *
+   * 已配置的模型在过滤后可能不可见，若一并取消会在用户看不到的情况下把它们
+   * 移出列表——这与 DSH 的处理一致：隐藏项保持原状。
+   */
+  const visibleToggleable = visible.filter((item) => !existingIds.has(item.id))
+  const allVisiblePicked =
+    visibleToggleable.length > 0 && visibleToggleable.every((item) => picked.has(item.id))
+
+  const toggleVisible = () => {
+    const target = !allVisiblePicked
+    setPicked((current) => {
+      const next = new Set(current)
+      for (const item of visibleToggleable) {
+        if (target) {
+          next.add(item.id)
+        } else {
+          next.delete(item.id)
+        }
+      }
+      return next
+    })
+  }
+
   /** 把勾选结果并入模型列表：已存在的跳过，新增的追加 */
   const apply = () =>
     run(async () => {
@@ -947,6 +983,7 @@ const ModelFetcher = ({
       setOpen(false)
       setCandidates([])
       setPicked(new Set())
+      setQuery('')
     })
 
   return (
@@ -968,8 +1005,25 @@ const ModelFetcher = ({
               {t('close')}
             </button>
           </div>
+          {/* 模型多时靠搜索定位；同时匹配 id 与显示名 */}
+          <input
+            className={styles.fetcherSearch}
+            type="search"
+            value={query}
+            placeholder={t('settingsSearchModels')}
+            aria-label={t('settingsSearchModels')}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {visibleToggleable.length > 0 ? (
+            <button type="button" className={styles.linkButton} onClick={toggleVisible}>
+              {allVisiblePicked ? t('settingsDeselectAll') : t('settingsSelectAll')}
+            </button>
+          ) : null}
           <div className={styles.fetcherList}>
-            {candidates.map((item) => {
+            {visible.length === 0 ? (
+              <p className={styles.fetcherEmpty}>{t('settingsNoMatchingModel')}</p>
+            ) : null}
+            {visible.map((item) => {
               const locked = existingIds.has(item.id)
               return (
                 <label

@@ -1,6 +1,10 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  settingsNoMatchingModel: 'No matching models',
+  settingsDeselectAll: 'Deselect all',
+  settingsSelectAll: 'Select all',
+  settingsSearchModels: 'Search models',
   settingsUpdateModelList: 'Update list',
   settingsModelAlreadyAdded: 'Already added',
   searchUnavailableTooltip: 'Neither this model nor the DeepSeek fallback supports web search',

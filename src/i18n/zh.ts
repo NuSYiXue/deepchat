@@ -1,4 +1,8 @@
 export const zh = {
+  settingsNoMatchingModel: '没有匹配的模型',
+  settingsDeselectAll: '取消全选',
+  settingsSelectAll: '全选',
+  settingsSearchModels: '搜索模型',
   settingsUpdateModelList: '更新列表',
   settingsModelAlreadyAdded: '已在列表中',
   searchUnavailableTooltip: '当前模型与官方兜底均不支持联网搜索',
