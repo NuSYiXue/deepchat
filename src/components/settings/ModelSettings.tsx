@@ -765,18 +765,15 @@ const ReasoningEditor = ({
 
       {enabled ? (
         <>
-          <select
+          {/* 用项目的 Select 而不是原生 select：原生下拉菜单由浏览器绘制，
+              深色主题下会出现白底浅字的不可读状态 */}
+          <Select
+            ariaLabel={t('settingsReasoningLevel')}
             className={styles.levelSelect}
             value={current}
-            aria-label={t('settingsReasoningLevel')}
-            onChange={(e) => setLevel(e.target.value)}
-          >
-            {THINKING_LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
+            options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))}
+            onChange={setLevel}
+          />
           <p className={styles.reasoningHint}>{t('settingsReasoningHint')}</p>
         </>
       ) : (

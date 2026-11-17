@@ -589,30 +589,29 @@
 }
 
 /* 档位下拉：原生 select + 背景箭头，避免额外组件依赖 */
+/* 推理等级下拉：Select 自带触发器样式，这里只覆盖尺寸与外观，
+   使其与同排的胶囊输入一致。箭头由 Select 渲染，不再用背景图。 */
 .levelSelect {
   box-sizing: border-box;
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
+  max-width: none;
   height: 38px;
   padding: 0 34px 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 19px;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 12px 12px;
-  appearance: none;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
+  background: transparent;
   font-size: 14px;
   line-height: 22px;
-  outline: none;
-  cursor: pointer;
 
-  &:focus {
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
     border-color: var(--dsw-alias-brand-primary);
+    box-shadow: none;
   }
 }
 
