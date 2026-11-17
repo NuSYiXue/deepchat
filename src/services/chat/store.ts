@@ -315,9 +315,19 @@ const createReply = (model: ChatModel): AssistantMessage => {
   }
 }
 
-/** 会话当前应使用的模型名：取模型配置，缺省回落到内置默认 */
-const modelNameOf = (session: Session | undefined): ChatModel =>
-  resolveModel(session?.modelId)?.model ?? MODEL
+/**
+ * 会话当前应使用的模型名。
+ *
+ * 会话指定的模型被停用或删除时返回 null：调用方据此拒绝发送，而不是悄悄
+ * 换成默认模型。只有会话本身没指定模型（新对话）才回落到内置默认。
+ */
+const modelNameOf = (session: Session | undefined): ChatModel | null => {
+  const resolved = resolveModel(session?.modelId)
+  if (resolved) {
+    return resolved.model
+  }
+  return session?.modelId ? null : MODEL
+}
 
 /** 仍在生成中的回复（页面关闭或导出时未结束）按「已停止」处理 */
 const settleInterrupted = (session: Session): Session => {
@@ -680,7 +690,12 @@ export const sendMessage = (targetSessionId: string | null) => {
     })),
     createdAt: now,
   }
-  const reply = createReply(modelNameOf(getSession(sessionId)))
+  // 会话模型被停用或删除时拒绝发送：必须由用户重新选择，不能悄悄换模型
+  const modelName = modelNameOf(getSession(sessionId))
+  if (modelName === null) {
+    return false
+  }
+  const reply = createReply(modelName)
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
     updatedAt: now,
@@ -714,7 +729,11 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     return
   }
   const history = path.slice(0, index - 1)
-  const reply = createReply(modelNameOf(getSession(sessionId)))
+  const modelName = modelNameOf(getSession(sessionId))
+  if (modelName === null) {
+    return
+  }
+  const reply = createReply(modelName)
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
@@ -746,7 +765,11 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
     files: previous.files,
     createdAt: Date.now(),
   }
-  const reply = createReply(modelNameOf(getSession(sessionId)))
+  const modelName = modelNameOf(getSession(sessionId))
+  if (modelName === null) {
+    return false
+  }
+  const reply = createReply(modelName)
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, path[index - 1]?.id ?? null, [question, reply]),
     updatedAt: Date.now(),
@@ -1081,6 +1104,22 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         // 但每条回复都会记录当时用的模型快照（AssistantMessage.model）。
         const sessionForRequest = getSession(sessionId)
         const modelConfig = resolveModel(sessionForRequest?.modelId)
+        /**
+         * 会话模型已被停用或删除：直接以错误收尾，不再发请求。
+         *
+         * 这里不能退回默认模型——那会让用户以为还在用原来的端点，实际计费与
+         * 效果都变了。正常入口（发送、重新生成、编辑、续写）已提前拦截，这条
+         * 兜底用于「生成过程中模型被停用」这类并发情况。
+         */
+        if (!modelConfig && sessionForRequest?.modelId) {
+          reply = settleReply(reply, 'error', Date.now(), {
+            kind: 'http',
+            message: '',
+            status: 409,
+            localMessage: { key: 'replyModelDisabled' },
+          })
+          break
+        }
         const modelName = modelConfig?.model ?? initial.model ?? MODEL
         const events = streamMessage(
           {

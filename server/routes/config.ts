@@ -132,6 +132,16 @@ const upsertModel = (
   const isDefault =
     typeof body.isDefault === 'boolean' ? (body.isDefault ? 1 : 0) : (current?.is_default ?? 0)
 
+  /**
+   * 默认模型不能被停用。
+   *
+   * 停用后「新对话用哪个模型」就没有答案，所有未指定模型的会话都会失败。
+   * 前端已经禁用了这个开关，这里再守一道，防止绕过 UI 的调用把配置弄坏。
+   */
+  if (isDefault === 1 && body.enabled === false) {
+    throw new HttpError(400, 'the default model cannot be disabled')
+  }
+
   db.prepare(
     `insert into models
        (id, endpoint_id, name, model, input_types, max_context, max_output, reasoning, is_default, position, native_search, enabled)
@@ -274,15 +284,16 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
       throw new HttpError(400, 'models of the built-in endpoint are fixed')
     }
     db.prepare(`delete from models where id = ?`).run(id)
-    db.prepare(`update sessions set model_id = null where model_id = ?`).run(id)
+    // 刻意不清空 sessions.model_id：会话指向的模型没了就应当提示用户重新选择，
+    // 清成 null 会让它悄悄改用默认模型，用户以为还在用原来的端点。
     return { ok: true }
   },
 
   /**
    * 删除端点，连带它的模型。
    *
-   * 模型表对 endpoints 有外键级联，但这里显式删除以便同时把引用了这些模型的
-   * 会话重置回默认，否则会话会指向已不存在的配置。
+   * 模型表对 endpoints 有外键级联，但这里显式删除。会话的 model_id 同样保留为
+   * 悬空值，由前端识别为「模型已不可用」并禁用发送，等用户重新选择。
    */
   deleteEndpoint: (id: string) => {
     const target = db.prepare(`select builtin from endpoints where id = ?`).get(id) as
@@ -292,12 +303,6 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
       throw new HttpError(400, 'the built-in DeepSeek endpoint cannot be deleted')
     }
     transaction(db, () => {
-      const models = db.prepare(`select id from models where endpoint_id = ?`).all(id) as {
-        id: string
-      }[]
-      for (const model of models) {
-        db.prepare(`update sessions set model_id = null where model_id = ?`).run(model.id)
-      }
       db.prepare(`delete from models where endpoint_id = ?`).run(id)
       db.prepare(`delete from endpoints where id = ?`).run(id)
     })

@@ -86,23 +86,45 @@ export const reloadConfig = async (): Promise<void> => {
 export const personaById = (id: string | undefined): Persona | undefined =>
   useConfig.getState().personas.find((item) => item.id === (id ?? DEFAULT_PERSONA_ID))
 
-/** 从给定列表里解析模型：优先按 id，其次默认模型，最后第一项 */
+/**
+ * 从给定列表里解析模型：优先按 id，其次默认模型，最后第一个可用模型。
+ *
+ * 显式给了 id 却找不到、或该模型已被关闭时返回 undefined，**不退回默认模型**。
+ * 那种情况说明会话原本使用的模型已不可用，必须让用户重新选择：悄悄换一个模型，
+ * 用户会以为还在用原来的端点，实际费用与效果都变了。
+ */
 export const resolveModelFrom = (
   models: ModelConfig[],
   id: string | null | undefined
 ): ModelConfig | undefined => {
   if (id) {
     const found = models.find((item) => item.id === id)
-    if (found) {
-      return found
-    }
+    return found?.enabled === true ? found : undefined
   }
-  return models.find((item) => item.isDefault) ?? models[0]
+  return (
+    models.find((item) => item.enabled && item.isDefault) ?? models.find((item) => item.enabled)
+  )
 }
 
 /** 会话未指定模型时用默认模型；读当前 store 快照 */
 export const resolveModel = (id: string | null | undefined): ModelConfig | undefined =>
   resolveModelFrom(useConfig.getState().models, id)
+
+/**
+ * 显式指定的模型是否已不可用（被停用或删除）。
+ *
+ * 用于在发送前拦截：这种情况下必须让用户重新选择模型，而不是退回默认模型。
+ * 配置尚未加载（列表为空）时一律视为可用，避免启动瞬间误判。
+ */
+export const isModelUnavailable = (
+  models: ModelConfig[],
+  id: string | null | undefined
+): boolean =>
+  Boolean(id) && models.length > 0 && !models.some((item) => item.id === id && item.enabled)
+
+/** 是否一个可用模型都没有；此时任何发送都必然失败 */
+export const hasEnabledModel = (models: ModelConfig[]): boolean =>
+  models.length === 0 || models.some((item) => item.enabled)
 
 export const endpointById = (id: string): Endpoint | undefined =>
   useConfig.getState().endpoints.find((item) => item.id === id)

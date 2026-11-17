@@ -17,15 +17,20 @@ const cssLoader = {
 }
 
 type ConfigOptions = {
-  /** 官方 DeepSeek 端点的默认地址；服务端化后前端不再直连上游 */
-  apiOrigin?: string
-  /** 开发服务器配置，支持本地接口代理 */
+  /** 开发服务器把 /api 转发到哪个后端；默认本机 3000 端口的 Node 服务 */
+  apiTarget?: string
+  /** 开发服务器配置，覆盖默认项 */
   devServer?: Configuration['devServer']
 }
 
-/** 创建构建配置，支持自定义 API 地址和开发服务器选项 */
+/**
+ * 创建构建配置。
+ *
+ * 前端只请求同源的 `/api/*`，由 Node 服务提供；开发模式下 rspack 自己不带
+ * 这些接口，因此必须把 `/api` 代理到后端，否则页面能打开但所有请求都是 404。
+ */
 export const createConfig = ({
-  apiOrigin = 'https://api.deepseek.com',
+  apiTarget = 'http://127.0.0.1:3000',
   devServer,
 }: ConfigOptions = {}): Configuration => ({
   mode: dev ? 'development' : 'production',
@@ -80,13 +85,17 @@ export const createConfig = ({
       scriptLoading: 'defer',
       meta: { 'application-version': version },
     }),
-    new rspack.DefinePlugin({ __API_ORIGIN__: JSON.stringify(apiOrigin) }),
     new rspack.CopyRspackPlugin({
       patterns: [{ from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' }],
     }),
   ],
   performance: { hints: false },
-  devServer: { port: 8090, ...devServer },
+  devServer: {
+    port: 8090,
+    // 前端只请求同源的 /api/*；不代理的话 dev server 会把它当静态资源返回 404
+    proxy: [{ context: ['/api'], target: apiTarget, changeOrigin: true }],
+    ...devServer,
+  },
 })
 
 // eslint-disable-next-line import/no-default-export

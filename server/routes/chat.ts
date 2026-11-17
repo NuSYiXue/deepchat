@@ -274,6 +274,8 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     const selectDefault = db.prepare(
       `select * from models where enabled = 1 order by is_default desc, position limit 1`
     )
+    /** 指定了模型却查不到时，用来区分「没配置」和「被停用了」 */
+    const selectAny = db.prepare(`select id, enabled from models where id = ? or model = ? limit 1`)
 
     const row = (
       modelId
@@ -290,6 +292,19 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         }
       | undefined
     if (!row) {
+      /**
+       * 指定了模型却解析不到：如果这个模型存在但被停用，明确告诉调用方。
+       *
+       * 不能退回默认模型——那会让用户以为还在用原来的端点，实际计费与效果
+       * 都变了。前端据此提示「模型已停用，请重新选择」。
+       */
+      if (modelId) {
+        const existing = selectAny.get(modelId, modelId) as { enabled: number } | undefined
+        if (existing && existing.enabled !== 1) {
+          throw new HttpError(409, `model "${modelId}" is disabled`)
+        }
+        throw new HttpError(404, `model "${modelId}" not found`)
+      }
       throw new HttpError(400, 'no enabled model configured')
     }
     let reasoning: ReasoningEfforts | undefined

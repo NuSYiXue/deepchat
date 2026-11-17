@@ -93,16 +93,6 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-/** 用服务端的端点自检接口验证配置（不产生费用） */
-export const verifyApiKey = async (endpointId: string, signal?: AbortSignal): Promise<void> => {
-  await request('/api/config/test-endpoint', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpointId }),
-    signal,
-  })
-}
-
 /**
  * 上传附件到上游 Files API，经自建服务转发。
  * purpose 为 null 时不传该字段（图片）；purpose 必须排在 file 之前。

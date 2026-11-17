@@ -1,0 +1,60 @@
+name: CI
+
+# 服务端化后前端不再是可直接托管的静态站：页面只请求同源的 /api/*，单独发布
+# 到 GitHub Pages 会得到一个加载正常但所有接口 404 的空壳。因此这里只做校验，
+# 不再发布站点；部署走 Docker（见 docs/deployment.md）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.6.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check types
+        run: pnpm type
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      # 服务端不经打包直接由 Node 运行，至少要确认它能启动并响应请求
+      - name: Smoke test the server
+        run: |
+          APP_PASSWORD=ci-password PORT=3000 DATA_DIR="$RUNNER_TEMP/data" node server/index.ts &
+          server_pid=$!
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3000/; then
+              break
+            fi
+            sleep 1
+          done
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/config)
+          kill $server_pid
+          echo "GET /api/config without a cookie -> $status"
+          test "$status" = "401"

@@ -6,7 +6,7 @@
  * 这样用户可以在输入前就选好模型与人设。
  */
 import { useMemo } from 'react'
-import { useConfig, DEFAULT_PERSONA_ID, resolveModel } from '../../services/server/config.js'
+import { useConfig, DEFAULT_PERSONA_ID, isModelUnavailable, resolveModel } from '../../services/server/config.js'
 import {
   setPendingModel,
   setPendingPersona,
@@ -45,10 +45,13 @@ export const ChatModelSelect = ({ sessionId }: { sessionId: string | null }) => 
       )
   }, [models, endpoints, t])
   // 新对话用待创建的选择，已有会话看会话自身
-  const current =
-    sessionId === null
-      ? (resolveModel(pending)?.id ?? '')
-      : (resolveModel(session?.modelId)?.id ?? '')
+  const targetId = sessionId === null ? pending : session?.modelId
+  const current = resolveModel(targetId)?.id ?? ''
+  /**
+   * 会话指定的模型已停用或删除时，下拉框留空并给出提示，而不是自动选一个
+   * 别的模型——用户必须自己确认换成哪个端点。
+   */
+  const unavailable = isModelUnavailable(models, targetId)
 
   if (models.length === 0) {
     return null
@@ -58,7 +61,7 @@ export const ChatModelSelect = ({ sessionId }: { sessionId: string | null }) => 
       value={current}
       options={options}
       ariaLabel={t('selectModel')}
-      placeholder={t('selectModel')}
+      placeholder={unavailable ? t('selectModelDisabledPlaceholder') : t('selectModel')}
       className={styles.select}
       onChange={(value) => {
         if (sessionId === null) {

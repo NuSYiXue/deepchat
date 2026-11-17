@@ -32,7 +32,7 @@ import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { ChatModelSelect, ChatPersonaSelect } from './ChatModelSelect.js'
-import { resolveModelFrom } from '../../services/server/config.js'
+import { isModelUnavailable, resolveModelFrom } from '../../services/server/config.js'
 import { usePendingSelection } from '../../services/chat/drafts.js'
 import { useConfig } from '../../services/server/config.js'
 import { useTranslate } from '../../i18n/index.js'
@@ -62,6 +62,15 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     sessionId !== null ? state.sessionCache[sessionId]?.modelId : undefined
   )
   const pendingModelId = usePendingSelection((state) => state.modelId)
+  /**
+   * 会话指定的模型是否已被停用或删除。
+   *
+   * 这种情况不自动退回默认模型：换模型会让用户以为还在用原来的端点，实际
+   * 计费与效果都变了。改为禁用发送，等用户自己重新选一个。
+   */
+  const modelUnavailable = useConfig((state) =>
+    isModelUnavailable(state.models, sessionId === null ? pendingModelId : sessionModelId)
+  )
   const currentModel = useConfig((state) =>
     resolveModelFrom(state.models, sessionId === null ? pendingModelId : sessionModelId)
   )
@@ -179,12 +188,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const recording = voice.status === 'recording'
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
-  const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
+  const canSend =
+    !importingHistory && !streaming && voice.status === 'idle' && draftReady && !modelUnavailable
 
   const send = () => {
     if (
       useChatStore.getState().importingHistory ||
       voice.status !== 'idle' ||
+      // 会话模型已停用时不能发送：必须由用户重新选一个模型
+      isModelUnavailable(
+        useConfig.getState().models,
+        sessionId === null ? usePendingSelection.getState().modelId : sessionModelId
+      ) ||
       !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks)
     ) {
       return
@@ -336,15 +351,17 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               <IconStopFill16 />
             </button>
           ) : (
-            <button
-              type="button"
-              className={clsx(styles.sendButton, !canSend && styles.disabled)}
-              aria-label={t('send')}
-              aria-disabled={!canSend}
-              onClick={send}
-            >
-              <IconSendOutline16 />
-            </button>
+            <Tooltip content={modelUnavailable ? t('sendUnavailableModelDisabled') : ''}>
+              <button
+                type="button"
+                className={clsx(styles.sendButton, !canSend && styles.disabled)}
+                aria-label={modelUnavailable ? t('sendUnavailableModelDisabled') : t('send')}
+                aria-disabled={!canSend}
+                onClick={send}
+              >
+                <IconSendOutline16 />
+              </button>
+            </Tooltip>
           )}
         </div>
       </div>

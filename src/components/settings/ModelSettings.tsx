@@ -475,15 +475,18 @@ const ProviderEditor = ({
                   >
                     <IconTrashOutline16 />
                   </button>
-                  {/* 启用开关：关闭后不在聊天下拉出现，也不参与任何自动选择 */}
+                  {/* 启用开关：关闭后不在聊天下拉出现，也不参与任何自动选择。
+                      默认模型不允许关闭——否则所有未指定模型的新对话都发不出去。 */}
                   <button
                     type="button"
                     role="switch"
                     aria-checked={model.enabled}
                     aria-label={`${t('settingsModelEnabled')} ${model.model}`}
-                    title={t('settingsModelEnabled')}
+                    title={
+                      model.isDefault ? t('settingsDefaultCannotDisable') : t('settingsModelEnabled')
+                    }
                     className={clsx(styles.switch, model.enabled && styles.switchOn)}
-                    disabled={busy}
+                    disabled={busy || model.isDefault}
                     onClick={() => void run(() => setModelEnabled(model, !model.enabled), true)}
                   >
                     <span className={styles.switchKnob} />
