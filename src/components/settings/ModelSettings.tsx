@@ -400,6 +400,15 @@ const ProviderEditor = ({
             <span className={styles.editorRoute}>
               {t('settingsModelCount', { count: models.length })}
             </span>
+            {/* 获取可用模型属于整个模型列表，不属于某一行：
+                它向端点查询候选，勾选后批量写入列表 */}
+            <ModelFetcher
+              endpoint={endpoint}
+              draft={draft}
+              existing={models}
+              busy={busy}
+              run={run}
+            />
           </div>
 
           {models.map((model) => {
@@ -570,19 +579,13 @@ const ModelFields = ({
   return (
     <div className={styles.modelAdvanced}>
       <Field label={t('settingsModelUpstream')}>
-        <div className={styles.upstreamRow}>
-          <input
-            className={styles.input}
-            value={value.model}
-            placeholder="deepseek-flash"
-            spellCheck={false}
-            onChange={(e) => onChange({ ...value, model: e.target.value })}
-          />
-          <ModelPicker
-            endpointId={value.endpointId}
-            onPick={(id) => onChange({ ...value, model: id })}
-          />
-        </div>
+        <input
+          className={styles.input}
+          value={value.model}
+          placeholder="deepseek-flash"
+          spellCheck={false}
+          onChange={(e) => onChange({ ...value, model: e.target.value })}
+        />
       </Field>
       <Field label={t('settingsModelName')}>
         <input
@@ -852,78 +855,158 @@ const ReasoningEditor = ({
 }
 
 /**
- * 「获取可用模型」：向端点查询模型列表并让用户挑一个。
+ * 获取可用模型：查询端点公布的模型，勾选后批量写入模型列表。
  *
- * 查询走 `/api/config/models/list`，用已保存的端点配置与密钥；拿不到时
- * 保留手动输入，不阻塞流程。
+ * 位置与交互照 DeepSeekRuntime：按钮在「模型」表头右侧，属于整个列表而不是
+ * 某一行；点击后弹出可勾选的面板，确认才写入草稿。
+ *
+ * 查询用编辑器里**尚未保存**的地址、方言与 Key，这样新建端点填完就能拉取，
+ * 不必先保存。已存在的模型默认勾选且不可取消，避免误删用户配置。
  */
-const ModelPicker = ({
-  endpointId,
-  onPick,
+const ModelFetcher = ({
+  endpoint,
+  draft,
+  existing,
+  busy,
+  run,
 }: {
-  endpointId: string
-  onPick: (id: string) => void
+  endpoint: Endpoint
+  draft: EndpointDraft | null
+  existing: ModelConfig[]
+  busy: boolean
+  run: Run
 }) => {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [models, setModels] = useState<{ id: string; name: string | null }[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [candidates, setCandidates] = useState<{ id: string; name: string | null }[]>([])
+  const [picked, setPicked] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const load = async () => {
-    setBusy(true)
+  /** 已存在的模型 id：这些在面板里默认勾选 */
+  const existingIds = new Set(existing.map((model) => model.model))
+
+  const fetchModels = async () => {
+    setLoading(true)
     setError(null)
     try {
-      const list = await listEndpointModels(endpointId)
-      setModels(list)
-      setOpen(true)
+      const list = await listEndpointModels(endpoint.id, {
+        origin: draft?.origin,
+        // 草稿里的 Key 优先：用户可能刚改过还没保存
+        ...(draft?.apiKey ? { apiKey: draft.apiKey } : {}),
+        dialect: draft?.dialect,
+      })
       if (list.length === 0) {
         setError(t('settingsFetchModelsEmpty'))
+        return
       }
+      setCandidates(list)
+      setPicked(new Set(list.filter((item) => existingIds.has(item.id)).map((item) => item.id)))
+      setOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      setModels(null)
     } finally {
-      setBusy(false)
+      setLoading(false)
     }
   }
 
+  const toggle = (id: string) => {
+    if (existingIds.has(id)) {
+      return
+    }
+    setPicked((current) => {
+      const next = new Set(current)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  /** 把勾选结果并入模型列表：已存在的跳过，新增的追加 */
+  const apply = () =>
+    run(async () => {
+      const toAdd = candidates.filter((item) => picked.has(item.id) && !existingIds.has(item.id))
+      for (const item of toAdd) {
+        await saveModel({
+          id: createId(),
+          endpointId: endpoint.id,
+          name: item.name ?? item.id,
+          model: item.id,
+          inputTypes: ['text'],
+          maxContext: 64000,
+          maxOutput: 8192,
+          reasoning: {},
+          isDefault: false,
+          nativeSearch: false,
+          enabled: true,
+        })
+      }
+      setOpen(false)
+      setCandidates([])
+      setPicked(new Set())
+    })
+
   return (
-    <div className={styles.pickerWrap}>
+    <div className={styles.fetcher}>
       <button
         type="button"
-        className={styles.secondaryButton}
-        disabled={busy}
-        onClick={() => void load()}
+        className={styles.linkButton}
+        disabled={busy || loading}
+        onClick={() => void fetchModels()}
       >
-        {busy ? t('settingsFetchingModels') : t('settingsFetchModels')}
+        {loading ? t('settingsFetchingModels') : t('settingsFetchModels')}
       </button>
 
-      {open && models ? (
-        <div className={styles.pickerPanel}>
-          <div className={styles.pickerHead}>
+      {open ? (
+        <div className={styles.fetcherPanel}>
+          <div className={styles.fetcherHead}>
             <span className={styles.fieldLabel}>{t('settingsAvailableModels')}</span>
             <button type="button" className={styles.linkButton} onClick={() => setOpen(false)}>
               {t('close')}
             </button>
           </div>
-          <div className={styles.pickerList}>
-            {models.map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                className={styles.pickerItem}
-                onClick={() => {
-                  onPick(model.id)
-                  setOpen(false)
-                }}
-              >
-                <span className={styles.pickerId}>{model.id}</span>
-                {model.name && model.name !== model.id ? (
-                  <span className={styles.pickerName}>{model.name}</span>
-                ) : null}
-              </button>
-            ))}
+          <div className={styles.fetcherList}>
+            {candidates.map((item) => {
+              const locked = existingIds.has(item.id)
+              return (
+                <label
+                  key={item.id}
+                  className={clsx(styles.fetcherItem, locked && styles.fetcherItemLocked)}
+                  title={locked ? t('settingsModelAlreadyAdded') : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={locked || picked.has(item.id)}
+                    disabled={locked}
+                    onChange={() => toggle(item.id)}
+                  />
+                  <span className={styles.pickerId}>{item.id}</span>
+                  {item.name && item.name !== item.id ? (
+                    <span className={styles.pickerName}>{item.name}</span>
+                  ) : null}
+                </label>
+              )
+            })}
+          </div>
+          <div className={styles.fetcherActions}>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => setOpen(false)}
+            >
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={busy || picked.size === existingIds.size}
+              onClick={() => void apply()}
+            >
+              {t('settingsUpdateModelList')}
+            </button>
           </div>
         </div>
       ) : null}

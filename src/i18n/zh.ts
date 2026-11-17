@@ -1,4 +1,6 @@
 export const zh = {
+  settingsUpdateModelList: '更新列表',
+  settingsModelAlreadyAdded: '已在列表中',
   searchUnavailableTooltip: '当前模型与官方兜底均不支持联网搜索',
   settingsModelEnabled: '启用该模型',
   settingsTestOkMs: '连接正常（{ms} ms）',

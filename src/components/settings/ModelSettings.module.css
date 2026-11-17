@@ -811,3 +811,84 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ---------- 获取可用模型 ---------- */
+
+/* 按钮放在「模型」表头右侧，面板从表头下方展开 */
+.fetcher {
+  position: relative;
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.fetcherPanel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, 100%);
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: 0 12px 32px 0 rgb(0 0 0 / 24%);
+}
+
+.fetcherHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fetcherList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.fetcherItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  input {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--dsw-alias-brand-primary);
+    cursor: pointer;
+  }
+}
+
+/* 已加入的条目：勾选锁定，读作「已有」而不是「可再选」 */
+.fetcherItemLocked {
+  cursor: default;
+  opacity: 0.6;
+
+  &:hover {
+    background: none;
+  }
+}
+
+.fetcherActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
