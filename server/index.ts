@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import type { ServerResponse } from 'node:http'
 import { createAuth, createSecret } from './auth.ts'
 import { openDatabase, seedEndpoints } from './db.ts'
-import { HttpError, json, sendResponse, toRequest } from './http.ts'
+import { HttpError, json, remoteAddressOf, sendResponse, toRequest } from './http.ts'
 import { createRouter } from './router.ts'
 import { createStaticHandler } from './static.ts'
 import { chatRoutes } from './routes/chat.ts'
@@ -53,8 +53,21 @@ if (!auth.enabled) {
 }
 
 const isHttps = (req: Request) => req.headers.get('x-forwarded-proto') === 'https'
-const clientIp = (req: Request) =>
-  (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
+
+/**
+ * 登录限流用的来源标识。
+ *
+ * X-Forwarded-For 客户端可以随便写：nginx 的 $proxy_add_x_forwarded_for 把真实
+ * 来源**追加**到链尾，链首完全由客户端控制。取链首等于让攻击者每次换个假 IP
+ * 就绕过失败锁定，所以取链尾；没有该头（内网直连）时退回 TCP 对端地址。
+ */
+const clientIp = (req: Request): string => {
+  const chain = (req.headers.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return chain.at(-1) ?? remoteAddressOf(req) ?? 'unknown'
+}
 
 /** 状态变更请求要求自定义头，表单无法伪造，等于免费的 CSRF 防护 */
 const requireCustomHeader = (req: Request): void => {
@@ -194,7 +207,7 @@ const serveStatic = createStaticHandler(DIST_DIR)
 const handle = async (req: Request): Promise<Response> => {
   const url = new URL(req.url)
   if (!url.pathname.startsWith('/api/')) {
-    return serveStatic(url)
+    return serveStatic(url, req)
   }
   if (url.pathname.startsWith('/api/auth')) {
     return routeApi(req, url)
@@ -218,7 +231,7 @@ const routeApi = async (req: Request, url: URL): Promise<Response> => {
   if (url.pathname.startsWith('/api/')) {
     return json({ error: 'not found' }, 404)
   }
-  return serveStatic(url)
+  return serveStatic(url, req)
 }
 
 const server = http.createServer((nodeReq, nodeRes: ServerResponse) => {

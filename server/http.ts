@@ -27,6 +27,16 @@ export const assertCleanText = (value: string, field: string): void => {
 }
 
 const aborted = Symbol('aborted')
+const remote = Symbol('remoteAddress')
+
+/**
+ * 底层连接的对端地址。
+ *
+ * 内网直连时没有 X-Forwarded-For，只能靠它区分来源；经反代时它记录的是
+ * 反代本身的地址，不能当作客户端 IP 使用。
+ */
+export const remoteAddressOf = (req: Request): string | undefined =>
+  (req as Request & { [remote]?: string })[remote]
 
 /** 把 IncomingMessage 转成 Web Request；客户端断开时中止请求信号 */
 export const toRequest = (req: IncomingMessage): Request => {
@@ -54,6 +64,10 @@ export const toRequest = (req: IncomingMessage): Request => {
     // 由调用方通过 signal 感知；Request 没有可中止的入口，这里只做标记
     ;(request as Request & { [aborted]?: boolean })[aborted] = true
   })
+  const address = req.socket.remoteAddress
+  if (address) {
+    ;(request as Request & { [remote]?: string })[remote] = address
+  }
   return request
 }
 
