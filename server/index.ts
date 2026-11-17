@@ -179,6 +179,8 @@ router.post('/api/config/endpoints', async ({ req }) => json(await config.saveEn
 router.post('/api/config/models', async ({ req }) => json(await config.saveModel(req)))
 router.post('/api/config/personas', async ({ req }) => json(await config.savePersona(req)))
 router.delete('/api/config/personas/:id', ({ params }) => json(config.deletePersona(params.id)))
+router.post('/api/config/models/:id/set-default', ({ params }) => json(config.setDefaultModel(params.id)))
+
 router.delete('/api/config/models/:id', ({ params }) => json(config.deleteModel(params.id)))
 router.delete('/api/config/endpoints/:id', ({ params }) => json(config.deleteEndpoint(params.id)))
 router.post('/api/config/settings', async ({ req }) => json(await config.putSetting(req)))

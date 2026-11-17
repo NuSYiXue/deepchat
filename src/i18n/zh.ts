@@ -1,4 +1,5 @@
 export const zh = {
+  searchUnavailableTooltip: '当前模型与官方兜底均不支持联网搜索',
   settingsModelEnabled: '启用该模型',
   settingsTestOkMs: '连接正常（{ms} ms）',
   settingsInputTypeDocument: '文档',

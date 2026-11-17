@@ -80,6 +80,27 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     const endpoint = state.endpoints.find((item) => item.id === target.endpointId)
     return endpoint?.builtin === true
   })
+  /**
+   * 智能搜索是否可用。
+   *
+   * 两种来源，任一成立即可：
+   * - 当前模型自己支持原生搜索（自定义端点声明的能力）；
+   * - 内置 DeepSeek 端点已配好 Key，可作为兜底替别的模型搜。
+   * 两者都不满足时按钮置灰——打开也不会有任何搜索发生。
+   */
+  const searchAvailable = useConfig((state) => {
+    const target = resolveModelFrom(
+      state.models,
+      sessionId === null ? pendingModelId : sessionModelId
+    )
+    if (!target) {
+      return false
+    }
+    if (target.nativeSearch) {
+      return true
+    }
+    return state.endpoints.some((endpoint) => endpoint.builtin && endpoint.hasKey)
+  })
   const accept = acceptFor(currentModel?.inputTypes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -248,12 +269,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
             </button>
           </Tooltip>
-          <Tooltip content={t('deactivatedSearchTooltip')}>
+          <Tooltip
+            content={
+              searchAvailable ? t('deactivatedSearchTooltip') : t('searchUnavailableTooltip')
+            }
+          >
             <button
               type="button"
-              className={clsx(styles.toggle, search && styles.selected)}
+              className={clsx(styles.toggle, search && searchAvailable && styles.selected)}
               aria-label={t('search')}
-              aria-pressed={search}
+              aria-pressed={search && searchAvailable}
+              // 模型不支持原生搜索、官方兜底也不可用时置灰
+              disabled={!searchAvailable}
               onClick={() => setSearch(!search)}
             >
               <IconGlobeLanguageOutline14 />

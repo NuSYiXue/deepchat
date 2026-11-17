@@ -1,6 +1,7 @@
 import type { zh } from './zh.js'
 
 export const en = {
+  searchUnavailableTooltip: 'Neither this model nor the DeepSeek fallback supports web search',
   settingsModelEnabled: 'Enable this model',
   settingsTestOkMs: 'Connection OK ({ms} ms)',
   settingsInputTypeDocument: 'Document',

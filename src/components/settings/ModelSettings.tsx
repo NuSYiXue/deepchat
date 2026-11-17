@@ -25,6 +25,7 @@ import {
   listEndpointModels,
   saveEndpoint,
   saveModel,
+  setDefaultModel,
   setModelEnabled,
   testEndpoint,
   testModel,
@@ -368,6 +369,30 @@ const ProviderEditor = ({
 
       {/* 内置端点的模型由程序固定，不展示列表；聊天窗口的选择器里直接
           显示为「DeepSeek 官方」。这里只在自定义端点下渲染模型管理。 */}
+      {/* 内置端点不展示模型列表，但仍要能指定「新对话默认用哪个模型」 */}
+      {builtin && endpoint ? (
+        <div className={styles.defaultRow}>
+          {models.map((model) =>
+            model.isDefault ? (
+              <span key={model.id} className={styles.defaultBadge}>
+                {t('settingsIsDefaultModel')}
+              </span>
+            ) : (
+              <button
+                key={model.id}
+                type="button"
+                className={styles.secondaryButton}
+                disabled={busy}
+                onClick={() => void run(() => setDefaultModel(model.id))}
+              >
+                {t('settingsSetDefaultModel')}
+              </button>
+            )
+          )}
+          <span className={styles.reasoningHint}>{t('settingsDefaultModelHint')}</span>
+        </div>
+      ) : null}
+
       {endpoint && !builtin ? (
         <div className={styles.models}>
           <div className={styles.modelsHead}>

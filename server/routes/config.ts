@@ -209,6 +209,29 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
   saveModel: async (req: Request) =>
     ({ id: upsertModel(db, await readJson(req)) }),
 
+  /**
+   * 把某个模型设为全局默认。
+   *
+   * 单独开一个入口，是因为内置端点的模型被锁定（不能改名、不能删），
+   * 但「新对话用哪个模型」仍要允许用户切换。
+   */
+  setDefaultModel: (id: string) => {
+    const target = db.prepare(`select id, enabled from models where id = ?`).get(id) as
+      | { id: string; enabled: number }
+      | undefined
+    if (!target) {
+      throw new HttpError(404, 'model not found')
+    }
+    if (target.enabled !== 1) {
+      throw new HttpError(400, 'a disabled model cannot be the default')
+    }
+    transaction(db, () => {
+      db.prepare(`update models set is_default = 0`).run()
+      db.prepare(`update models set is_default = 1 where id = ?`).run(id)
+    })
+    return { ok: true }
+  },
+
   savePersona: async (req: Request) =>
     ({ id: upsertPersona(db, await readJson(req)) }),
 

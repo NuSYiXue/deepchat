@@ -149,6 +149,12 @@ export const deleteEndpoint = async (id: string): Promise<void> => {
   await reloadConfig()
 }
 
+/** 把某个模型设为全局默认 */
+export const setDefaultModel = async (id: string): Promise<void> => {
+  await sendJson(`/api/config/models/${encodeURIComponent(id)}/set-default`, 'POST')
+  await reloadConfig()
+}
+
 export const deleteModel = async (id: string): Promise<void> => {
   await sendEmpty(`/api/config/models/${encodeURIComponent(id)}`, 'DELETE')
   await reloadConfig()
