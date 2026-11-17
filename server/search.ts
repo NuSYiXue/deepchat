@@ -13,6 +13,7 @@
  */
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from './http.ts'
+import { buildUrl } from './url.ts'
 
 export type SearchHit = {
   title: string
@@ -70,14 +71,13 @@ export const relaySearch = async (
     throw new HttpError(400, 'the built-in DeepSeek endpoint has no model with native search')
   }
   const endpoint = found.endpoint
-  const base = endpoint.origin.replace(/\/+$/, '')
   const isDeepSeek = endpoint.dialect === 'deepseek'
 
   const tools = isDeepSeek
     ? [{ type: 'deepseek_web_search', name: 'deepseek_web_search' }]
     : [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]
 
-  const response = await fetch(`${base}/anthropic/v1/messages`, {
+  const response = await fetch(buildUrl(endpoint.origin, endpoint.dialect, 'messages'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

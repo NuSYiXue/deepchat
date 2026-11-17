@@ -10,6 +10,7 @@ import { toOpenAIBody, translateOpenAIStream } from './openai.ts'
 import { trimMessages } from '../context.ts'
 import { normalizeEfforts, pickLevel, type ReasoningEfforts } from '../reasoning.ts'
 import { formatHits, relaySearch } from '../search.ts'
+import { buildUrl } from '../url.ts'
 
 export type EndpointRow = {
   id: string
@@ -371,11 +372,10 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
         delete upstreamBody.max_tokens
       }
 
-      const base = endpoint.origin.replace(/\/+$/, '')
       const isOpenAI = endpoint.dialect === 'openai'
       const target = isOpenAI
-        ? `${base}/v1/chat/completions`
-        : `${base}/anthropic/v1/messages`
+        ? buildUrl(endpoint.origin, 'openai', 'chat/completions')
+        : buildUrl(endpoint.origin, endpoint.dialect, 'messages')
 
       const headers: Record<string, string> = isOpenAI
         ? {
@@ -444,10 +444,9 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       if (!capabilitiesFor(endpoint).filesApi) {
         throw new HttpError(501, 'this endpoint does not support the Files API')
       }
-      const base = endpoint.origin.replace(/\/+$/, '')
       const form = await req.formData()
 
-      const upstream = await fetch(`${base}/anthropic/v1/files`, {
+      const upstream = await fetch(buildUrl(endpoint.origin, endpoint.dialect, 'files'), {
         method: 'POST',
         headers: {
           'x-api-key': endpoint.api_key,
@@ -475,9 +474,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       if (!endpoint.api_key) {
         throw new HttpError(400, 'API key is empty')
       }
-      const base = endpoint.origin.replace(/\/+$/, '')
-      const target =
-        endpoint.dialect === 'openai' ? `${base}/v1/models` : `${base}/models`
+      const target = buildUrl(endpoint.origin, endpoint.dialect, 'models')
       const response = await fetch(target, {
         headers: { authorization: `Bearer ${endpoint.api_key}` },
       }).catch((error: unknown) => {
@@ -501,11 +498,10 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       if (!endpoint.api_key) {
         throw new HttpError(400, `endpoint "${endpoint.name}" has no API key`)
       }
-      const base = endpoint.origin.replace(/\/+$/, '')
       const isOpenAI = endpoint.dialect === 'openai'
       const target = isOpenAI
-        ? `${base}/v1/chat/completions`
-        : `${base}/anthropic/v1/messages`
+        ? buildUrl(endpoint.origin, 'openai', 'chat/completions')
+        : buildUrl(endpoint.origin, endpoint.dialect, 'messages')
 
       const started = Date.now()
       const response = await fetch(target, {
@@ -558,7 +554,7 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       if (!apiKey) {
         throw new HttpError(400, 'API key is empty')
       }
-      const target = dialect === 'openai' ? `${origin}/v1/models` : `${origin}/models`
+      const target = buildUrl(origin, dialect, 'models')
       const response = await fetch(target, {
         headers: { authorization: `Bearer ${apiKey}` },
       }).catch((error: unknown) => {
