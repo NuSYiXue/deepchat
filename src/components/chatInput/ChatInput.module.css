@@ -286,35 +286,6 @@
   display: none;
 }
 
-/**
- * 窄屏（手机）下的功能行。
- *
- * 一行要塞两个开关、两个选择器和三个按钮，360–430px 的屏宽根本放不下：
- * 选择器设了 flex-shrink: 1，结果被压到只剩箭头，看不出选的是哪个模型。
- * 这里改为允许换行，让选择器保住可读宽度，超出的部分整体折到第二行。
- * 仍然用 flex-wrap 而不是固定断点，宽度介于两者之间时也能自然取舍。
- */
-@media not all and (min-width: 768px) {
-  .functionRow {
-    /* 让 toggles 和右侧按钮组各自独占一行宽度 */
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-
-  .toggles {
-    /* 占满第一行；内部同样允许换行 */
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-
-  .toggles .select {
-    /* 换行后不再需要靠压缩腾空间，给一个能看清名称的下限 */
-    flex: 0 1 auto;
-    min-width: 88px;
-  }
-}
-
 .toggle {
   display: inline-flex;
   flex-shrink: 0;
