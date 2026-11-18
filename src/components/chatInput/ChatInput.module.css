@@ -297,13 +297,22 @@
 @media not all and (min-width: 768px) {
   .toggles .select {
     /**
-     * 与收起后的 .toggle 保持完全相同的盒子。
+     * 与收起后的 .toggle 走同一条宽度计算路径：由内容撑开。
      *
-     * .toggle 是 height 34 + padding 0 12px + 14px 图标 = 38×34，圆角 18px，
-     * 所以它不是正圆而是圆角胶囊；这里照抄同一组数值，四个图标并排时才齐。
+     * 不能写死宽度。.toggle 是 width: auto + border-box，0.8px 边框**额外**
+     * 叠加在内容之外，实际宽度是 0.8 + 12 + 14 + 12 + 0.8 = 39.6px。如果这里
+     * 写 width: 38px，边框会被算进这 38px 里，内容区只剩 36.4px，两者差
+     * 1.6px。改成 auto 后两边都由「边框 + 内边距 + 图标」撑开，必然一致，
+     * 且以后调整图标尺寸或内边距时不会失配。
+     *
+     * min-width: 0 必须显式给：flex 子项默认 min-width: auto 会按内容最小宽度
+     * 占位，去掉它宽度就不再由内容决定。
      */
-    width: 38px;
-    min-width: 38px;
+    width: auto;
+    min-width: 0;
+    /* 只留图标时不该再被压缩：width: auto 会让它成为可收缩项，
+       360px 以下又会被压扁。开关本身就是 flex-shrink: 0，这里保持一致。 */
+    flex-shrink: 0;
     padding: 0 12px;
     justify-content: center;
     gap: 0;
