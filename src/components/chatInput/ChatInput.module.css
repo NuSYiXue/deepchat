@@ -261,6 +261,8 @@
   height: 34px;
   /* 右侧多留出箭头的位置；左侧和开关一致 */
   padding: 0 30px 0 12px;
+  /* 与 .toggle 一致：图标和文字之间留 4px */
+  gap: 4px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 18px;
   background: transparent;
@@ -279,6 +281,45 @@
   /* 箭头跟随更小的内边距；Select 自身固定 14px */
   & > span:last-child {
     right: 10px;
+  }
+}
+
+/**
+ * 窄屏（手机）下的选择器：收成纯图标。
+ *
+ * 一行要塞两个开关、两个选择器和三个按钮，360–430px 放不下；原来只有选择器
+ * 带 flex-shrink，被压到只剩箭头，看不出选的是哪个模型。现在两个选择器都有
+ * 前置图标，窄屏时隐藏文字与箭头，只留图标，与相邻的深度思考/智能搜索
+ * （空间不足时也只剩图标）保持一致的形态。
+ *
+ * 图标保留 aria-label 与下拉行为，点开仍是完整选项列表，功能不受影响。
+ */
+@media not all and (min-width: 768px) {
+  .toggles .select {
+    /**
+     * 与收起后的 .toggle 保持完全相同的盒子。
+     *
+     * .toggle 是 height 34 + padding 0 12px + 14px 图标 = 38×34，圆角 18px，
+     * 所以它不是正圆而是圆角胶囊；这里照抄同一组数值，四个图标并排时才齐。
+     */
+    width: 38px;
+    min-width: 38px;
+    padding: 0 12px;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /**
+   * 文字与箭头在窄屏下不显示。
+   *
+   * 选择器触发器由 Select 组件渲染，它内部的 .label / .arrow 属于
+   * Select.module.css，类名带的是那个模块的 hash，本文件的 `.label` 编译后
+   * 对不上。这里按「子元素顺序」定位：图标是第 1 个，文字/占位是第 2 个，
+   * 箭头是最后一个。用 :nth-child 而不是类名，跨模块也成立。
+   */
+  .functionRow .toggles .select > span:nth-child(2),
+  .functionRow .toggles .select > span:last-child {
+    display: none;
   }
 }
 

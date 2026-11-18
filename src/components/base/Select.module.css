@@ -35,7 +35,9 @@
     cursor: default;
   }
 
-  > span:first-child {
+  /* 文字过长时省略；图标不参与，见 .icon */
+  > .label,
+  > .placeholder {
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -47,6 +49,20 @@
 
 .placeholder {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* 选中项文字；与 placeholder 同处第一个可伸缩位置 */
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 触发器前置图标：与文字同色、不参与压缩，窄屏收起文字后它就是唯一内容 */
+.icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: currentColor;
 }
 
 .arrow {

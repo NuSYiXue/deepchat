@@ -15,6 +15,7 @@ import {
 import { setSessionModel, setSessionPersona, useChatStore } from '../../services/chat/store.js'
 import { useTranslate } from '../../i18n/index.js'
 import { Select, type SelectOption } from '../base/Select.js'
+import { IconChipOutline14, IconPersonOutline14 } from '../base/icons.js'
 import styles from './ChatInput.module.css'
 
 /** 模型选择：不限制会话是否已有消息，每条回复都会记录当时的模型快照 */
@@ -63,6 +64,7 @@ export const ChatModelSelect = ({ sessionId }: { sessionId: string | null }) => 
       ariaLabel={t('selectModel')}
       placeholder={unavailable ? t('selectModelDisabledPlaceholder') : t('selectModel')}
       className={styles.select}
+      icon={<IconChipOutline14 />}
       onChange={(value) => {
         if (sessionId === null) {
           setPendingModel(value)
@@ -110,6 +112,7 @@ export const ChatPersonaSelect = ({ sessionId }: { sessionId: string | null }) =
       placeholder={t('selectPersona')}
       disabled={locked}
       className={styles.select}
+      icon={<IconPersonOutline14 />}
       onChange={(value) => {
         if (sessionId === null) {
           setPendingPersona(value)

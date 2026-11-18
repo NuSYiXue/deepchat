@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from './anchored.js'
 import { IconCheckOutline16, IconChevronDownOutline14 } from './icons.js'
@@ -10,6 +10,9 @@ export type SelectOption<T extends string> = { value: T; label: string; lang?: s
 /**
  * 胶囊形选择器：触发器高 36px、圆角 18px、浅灰底，下拉菜单选中项右侧打勾；
  * 点外部或 Esc 关闭。value 不匹配任何选项时触发器显示 placeholder。
+ *
+ * `icon` 是可选的触发器前置图标，只给聊天输入框里的模型/人设选择器用：
+ * 窄屏时这两处的文字会被隐藏，只留图标，与相邻的深度思考/智能搜索一致。
  */
 export const Select = <T extends string>({
   value,
@@ -19,6 +22,7 @@ export const Select = <T extends string>({
   ariaLabel,
   className,
   disabled = false,
+  icon,
 }: {
   value: T
   options: SelectOption<T>[]
@@ -27,6 +31,7 @@ export const Select = <T extends string>({
   ariaLabel?: string
   className?: string
   disabled?: boolean
+  icon?: ReactNode
 }) => {
   const [open, setOpen] = useState(false)
   const current = options.find((option) => option.value === value)
@@ -50,8 +55,11 @@ export const Select = <T extends string>({
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
       >
+        {icon ? <span className={styles.icon}>{icon}</span> : null}
         {current ? (
-          <span lang={current.lang}>{current.label}</span>
+          <span className={styles.label} lang={current.lang}>
+            {current.label}
+          </span>
         ) : (
           <span className={styles.placeholder}>{placeholder}</span>
         )}

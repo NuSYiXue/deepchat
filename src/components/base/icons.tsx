@@ -523,3 +523,45 @@ export const IconToastError16 = () => (
     />
   </svg>
 )
+
+/**
+ * 芯片：斜置方块 + 中心小方块 + 四向引脚。
+ *
+ * 用于聊天输入框的模型选择器，与「深度思考」「智能搜索」同属线条图标。
+ * 斜置让它在四个圆/方轮廓的图标里辨识度最高；引脚只在四个正方向出一根，
+ * 14px 下不会和外框糊在一起。
+ */
+export const IconChipOutline14 = () => (
+  <svg width={14} height={14} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="4.2"
+      y="4.2"
+      width="7.6"
+      height="7.6"
+      rx="1.3"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      transform="rotate(45 8 8)"
+    />
+    <rect x="6.8" y="6.8" width="2.4" height="2.4" rx=".4" fill="currentColor" />
+    <path
+      d="M8 1.2v2.2M8 12.6v2.2M1.2 8h2.2M12.6 8h2.2"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+/** 人形：圆头 + 肩线，用于聊天输入框的人设选择器 */
+export const IconPersonOutline14 = () => (
+  <svg width={14} height={14} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="8" cy="5.5" r="2.6" stroke="currentColor" strokeWidth={1.3} />
+    <path
+      d="M3.2 13.4c0-2.4 2.1-4 4.8-4s4.8 1.6 4.8 4"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      strokeLinecap="round"
+    />
+  </svg>
+)
