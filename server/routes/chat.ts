@@ -217,16 +217,17 @@ export const buildUpstreamBody = (
        * 漏了判断。
        */
       payload.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]
-    } else if (useSearchTool || useFetchTool) {
+    } else if ((useSearchTool || useFetchTool) && body.search === true) {
       /**
        * 自定义端点：声明我们自己的工具。
        *
-       * 搜索工具受「智能搜索」开关控制；读取网页（read_url）是独立能力，
-       * 只要配了抓取地址就给——用户点开搜索结果里的链接是常见诉求，
-       * 与是否开启搜索无关。所以这里的判断是「任一成立」而不是只看搜索。
+       * **两个工具都受「智能搜索」开关控制**。读取网页虽然语义上独立，但它
+       * 是搜索链路的延伸（模型通常在搜索结果里挑链接去读），关掉搜索还声明
+       * read_url 会让人困惑，也白白增加请求体积。用户关搜索就是不想让模型
+       * 联网，那就一个工具都别给。
        */
       const tools: unknown[] = []
-      if (useSearchTool && body.search === true) {
+      if (useSearchTool) {
         tools.push(dialect === 'openai' ? openAISearchTool() : anthropicSearchTool())
       }
       if (useFetchTool) {
@@ -990,12 +991,12 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
       /**
        * 是否走我们自己的工具循环。
        *
-       * 搜索要「开关打开 + 服务已配」；读取网页只要「抓取地址已配」——
-       * 它是独立能力，不受智能搜索开关影响。
+       * 两个工具都受「智能搜索」开关控制：用户关掉搜索就是不想让模型联网，
+       * 此时连 read_url 也不声明，更不该进工具循环。
        */
-      const useCustomSearchTool =
-        !useNativeSearch && body.search === true && searchReady
-      const useFetchTool = !useNativeSearch && fetchReady
+      const searchOn = !useNativeSearch && body.search === true
+      const useCustomSearchTool = searchOn && searchReady
+      const useFetchTool = searchOn && fetchReady
       const useToolLoop = useCustomSearchTool || useFetchTool
 
       const isOpenAI = endpoint.dialect === 'openai'
