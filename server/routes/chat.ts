@@ -207,8 +207,15 @@ export const buildUpstreamBody = (
      */
     if (dialect === 'deepseek') {
       payload.tools = body.tools
-    } else if (dialect === 'anthropic' && nativeSearch === true) {
-      // 原生搜索可用：交给上游执行，这是最优路径，不叠加自己的工具
+    } else if (dialect === 'anthropic' && nativeSearch === true && body.search === true) {
+      /**
+       * 原生搜索可用**且用户开着搜索开关**时才声明。
+       *
+       * 必须看 body.search：部分中转端点只要看到 web_search_20250305 就会去
+       * 初始化搜索会话（甚至直接执行一次搜索），即使模型最终不调用。实测
+       * 首字延迟从 1.6s 涨到 8-10s。用户关掉搜索按钮却仍被拖慢，就是这里
+       * 漏了判断。
+       */
       payload.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }]
     } else if (useSearchTool || useFetchTool) {
       /**
