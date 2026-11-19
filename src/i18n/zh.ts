@@ -5,7 +5,7 @@ export const zh = {
   settingsSearchModels: '搜索模型',
   settingsUpdateModelList: '更新列表',
   settingsModelAlreadyAdded: '已在列表中',
-  searchUnavailableTooltip: '当前模型与官方兜底均不支持联网搜索',
+  searchUnavailableTooltip: '该模型不支持联网搜索，且未配置搜索服务',
   sendUnavailableModelDisabled: '当前模型已停用，请重新选择模型后再发送',
   selectModelDisabledPlaceholder: '模型已停用，请重新选择',
   settingsModelEnabled: '启用该模型',
@@ -163,9 +163,56 @@ export const zh = {
   settingsLocationCity: '请选择市',
   settingsLocationRegion: '请选择国家或地区',
   settingDialogAsideGeneralOptionLabel: '通用设置',
+
+  // ---- 思考折叠 ----
+  settingsThinkingCollapse: '思考内容折叠',
+  settingsThinkingCollapseKeep: '保持展开',
+  settingsThinkingCollapseKeepHint: '思考过程一直显示，需要时自己点标题收起。',
+  settingsThinkingCollapseOnAnswer: '回答开始时收起',
+  settingsThinkingCollapseOnAnswerHint: '答案一开始输出就自动收起思考内容，注意力转到答案上。',
+  settingsThinkingCollapseOnFinish: '回答结束后收起',
+  settingsThinkingCollapseOnFinishHint:
+    '整条回复结束时再收起，生成过程中可以看完思考过程。',
   settingDialogAsideModelsOptionLabel: '模型',
   settingDialogAsidePersonasOptionLabel: '人设',
+  settingDialogAsideSearchOptionLabel: '搜索服务',
   settingDialogAsideDataOptionLabel: '数据管理',
+
+  // ---- 搜索服务 ----
+  settingsSearchEnabled: '启用兜底搜索',
+  settingsSearchEnabledHint:
+    '当模型不支持原生联网搜索时，用它来查一次并注入结果。内置 DeepSeek 官方端点不受影响。',
+  settingsSearchPreset: '服务类型',
+  settingsSearchPresetDeepSeek: 'DeepSeek 搜索',
+  settingsSearchPresetCustom: '自定义',
+  settingsSearchPresetDeepSeekHint:
+    'DeepSeek 官方搜索接口 /v1/tools/search，只需填 API Key，按成功请求计费。',
+  settingsSearchPresetCustomHint:
+    '接入任意搜索 API。请求体固定发送 {"query":"..."}，响应字段在下方配置。',
+  settingsSearchUrl: '请求地址',
+  settingsSearchFetchUrl: '网页读取地址',
+  settingsSearchFetchUrlHint:
+    '模型调用 read_url 工具时会请求这个地址取网页正文，请求体为 {"url":"..."}。留空表示不支持读取网页。DeepSeek 用 /v1/tools/fetch。',
+  settingsSearchKey: 'API Key',
+  settingsSearchKeyPlaceholder: '粘贴搜索服务的 API Key',
+  settingsSearchKeyKeep: '留空表示不修改已保存的 Key',
+  settingsSearchKeySaved: '已保存 Key，留空则保持不变',
+  settingsSearchKeyMissing: '还未配置 Key',
+  settingsSearchHeaders: '附加请求头（JSON）',
+  settingsSearchHeadersHint:
+    '有些搜索服务把 Key 放在自定义头里，例如 {"X-Api-Key":"..."}。留空则只用 Bearer。',
+  settingsSearchResultsPath: '结果数组路径',
+  settingsSearchResultsPathHint:
+    '响应里结果列表的位置，用点号分隔，例如 results、data.items。',
+  settingsSearchFields: '字段映射',
+  settingsSearchFieldsHint:
+    '依次填写标题、链接、摘要在各条目里的字段名，支持点号路径。',
+  settingsSearchTitleField: '标题字段',
+  settingsSearchUrlField: '链接字段',
+  settingsSearchSnippetField: '摘要字段',
+  settingsSearchTest: '测试搜索',
+  settingsSearchTestOk: '搜索正常（{ms} ms，{count} 条，首条：{first}）',
+  settingsSearchTestEmpty: '请求成功（{ms} ms），但没有返回结果',
   avatarMenuSettingsDialogThemeItemLabel: '主题',
   avatarMenuSettingsDialogThemeSelectLightOption: '浅色',
   avatarMenuSettingsDialogThemeSelectDarkOption: '深色',

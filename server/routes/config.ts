@@ -7,6 +7,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError, assertCleanText, readJson } from '../http.ts'
 import { normalizeEfforts } from '../reasoning.ts'
+import { isSearchConfigured, readSearchConfig } from '../search.ts'
 import {
   DEFAULT_PERSONA_ID,
   listEndpoints,
@@ -224,6 +225,8 @@ export const configRoutes = ({ db }: { db: DatabaseSync }) => ({
         (row) => [row.key, row.value]
       )
     ),
+    /** 兜底搜索是否可用；前端据此决定「智能搜索」按钮是否置灰 */
+    searchConfigured: isSearchConfigured(readSearchConfig(db)),
   }),
 
   saveEndpoint: async (req: Request) =>

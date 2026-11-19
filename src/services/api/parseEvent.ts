@@ -49,50 +49,76 @@ const readBlock = (value: unknown): OutputBlockStart | null => {
       } as OutputBlockStart
     case 'server_tool_use': {
       const input = value.input
-      if (
-        !isString(value.id) ||
-        !['search', 'deep_search', 'read_link', 'image_search', 'deep_image_search'].includes(
-          value.kind as string
-        ) ||
-        !['deepseek_web_search', 'deepseek_read_url'].includes(value.name as string) ||
-        !isRecord(input)
-      ) {
+      if (!isString(value.id) || !isRecord(input)) {
         return null
       }
-      switch (input.action) {
-        case 'search':
-          if (!Array.isArray(input.queries) || !input.queries.every(isString)) {
-            return null
-          }
-          break
-        case 'open_page':
-        case 'read_link':
-          if (!isString(input.url)) {
-            return null
-          }
-          break
-        case 'find_in_page':
-          if (!isString(input.url) || !isString(input.pattern)) {
-            return null
-          }
-          break
-        default:
+      /**
+       * 两种来源要同时认：
+       * - DeepSeek 私有格式：name 是 deepseek_web_search / deepseek_read_url，
+       *   带 kind 字段，input.action 决定结构；
+       * - 标准 Anthropic 格式：name 是 web_search，没有 kind，input 是 { query }。
+       *
+       * 后者归一化成前者，下游 view.ts / toArchive.ts 只需处理一种形状。
+       */
+      const isDeepSeekTool =
+        value.name === 'deepseek_web_search' || value.name === 'deepseek_read_url'
+      if (isDeepSeekTool) {
+        if (
+          !['search', 'deep_search', 'read_link', 'image_search', 'deep_image_search'].includes(
+            value.kind as string
+          )
+        ) {
           return null
+        }
+        switch (input.action) {
+          case 'search':
+            if (!Array.isArray(input.queries) || !input.queries.every(isString)) {
+              return null
+            }
+            break
+          case 'open_page':
+          case 'read_link':
+            if (!isString(input.url)) {
+              return null
+            }
+            break
+          case 'find_in_page':
+            if (!isString(input.url) || !isString(input.pattern)) {
+              return null
+            }
+            break
+          default:
+            return null
+        }
+        break
       }
-      break
+
+      // 标准 Anthropic web_search：把 { query } 折成 { action: 'search', queries }
+      if (value.name === 'web_search' && isString(input.query)) {
+        return {
+          ...value,
+          kind: 'search',
+          caller: { type: 'direct' },
+          input: { action: 'search', queries: [input.query] },
+        } as OutputBlockStart
+      }
+      return null
     }
     case 'web_search_tool_result':
       if (
         !isString(value.tool_use_id) ||
-        !['search', 'deep_search', 'image_search', 'deep_image_search'].includes(
-          value.kind as string
-        ) ||
-        !Array.isArray(value.content)
+        !Array.isArray(value.content) ||
+        // 标准 Anthropic 的结果块没有 kind，补成 'search'
+        (value.kind !== undefined &&
+          !['search', 'deep_search', 'image_search', 'deep_image_search'].includes(
+            value.kind as string
+          ))
       ) {
         return null
       }
       return {
         ...value,
+        kind: value.kind === undefined ? 'search' : value.kind,
         content: value.content.filter((item) => {
           if (!isRecord(item)) {
             return false

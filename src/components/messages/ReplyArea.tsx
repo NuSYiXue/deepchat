@@ -15,6 +15,7 @@ import {
   IconThinkOutline16,
 } from '../base/icons.js'
 import type { AssistantMessage } from '../../services/chat/types.js'
+import { useSettings } from '../../services/settings.js'
 import {
   getAreaTitle,
   isDeepSearchKind,
@@ -65,20 +66,60 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
+  const collapseMode = useSettings((state) => state.thinkingCollapse)
   const [open, setOpen] = useState(true)
+  /** 用户点过标题后就不再自动折叠：手动操作优先于设置 */
+  const [touched, setTouched] = useState(false)
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
+
+  /**
+   * 按设置自动折叠。
+   *
+   * 两个时机：
+   * - onAnswer：回答开始输出（hasResponse 变 true）时收起，此时注意力已转到答案；
+   * - onFinish：流结束（streaming 变 false）后收起，期间能看完思考过程。
+   *
+   * 只触发一次（touched 之后不再干预），避免用户展开后又被折叠回去。
+   */
+  useEffect(() => {
+    if (touched || collapseMode === 'keep') {
+      return
+    }
+    if (collapseMode === 'onAnswer' && hasResponse) {
+      setOpen(false)
+    } else if (collapseMode === 'onFinish' && !streaming && hasResponse) {
+      setOpen(false)
+    }
+  }, [collapseMode, hasResponse, streaming, touched])
+
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
   }
-  // 未记录请求开关时，按是否有思考内容显示标题。
-  const thinking = message.thinking ?? view.steps.some((step) => step.type === 'thinking')
+  /**
+   * 是否显示可折叠标题。
+   *
+   * 不能只看 message.thinking：那是**请求时开关的快照**，不是「这轮有没有思考
+   * 内容」。自定义端点的模型用自身的推理等级，聊天窗口的深度思考按钮是灰的、
+   * 快照恒为 false，但模型照样会返回思考内容——此时按快照判断就不给标题，思考
+   * 内容平铺在回答上方，收不起来。
+   *
+   * 所以两个来源取并集：开关快照为真，或者流里确实出现了思考块。
+   */
+  const thinking =
+    message.thinking === true || view.steps.some((step) => step.type === 'thinking')
   const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
   return (
     <div className={styles.area}>
       {title ? (
-        <div className={styles.title} onClick={() => setOpen((value) => !value)}>
+        <div
+          className={styles.title}
+          onClick={() => {
+            setTouched(true)
+            setOpen((value) => !value)
+          }}
+        >
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>
             <IconThinkOutline16 />
           </span>

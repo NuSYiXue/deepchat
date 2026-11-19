@@ -93,8 +93,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
    * 智能搜索是否可用。
    *
    * 两种来源，任一成立即可：
-   * - 当前模型自己支持原生搜索（自定义端点声明的能力）；
-   * - 内置 DeepSeek 端点已配好 Key，可作为兜底替别的模型搜。
+   * - 当前模型自己支持原生搜索（端点上声明的能力）；
+   * - 设置里配好了独立的搜索服务，可替不支持原生搜索的模型查一次。
+   *
+   * 内置 DeepSeek 端点不参与兜底：它有自己的原生搜索，不该替别的模型消耗额度。
    * 两者都不满足时按钮置灰——打开也不会有任何搜索发生。
    */
   const searchAvailable = useConfig((state) => {
@@ -105,10 +107,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (!target) {
       return false
     }
-    if (target.nativeSearch) {
-      return true
-    }
-    return state.endpoints.some((endpoint) => endpoint.builtin && endpoint.hasKey)
+    return target.nativeSearch || state.searchConfigured
   })
   const accept = acceptFor(currentModel?.inputTypes)
   const fileInputRef = useRef<HTMLInputElement>(null)

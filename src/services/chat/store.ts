@@ -5,8 +5,9 @@ import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
-import { DEFAULT_PERSONA_ID, personaById, resolveModel, useConfig } from '../server/config.js'
+import { DEFAULT_PERSONA_ID, endpointById, personaById, resolveModel, useConfig } from '../server/config.js'
 import type { ModelConfig } from '../server/config.js'
+import { sendJson } from '../server/http.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import {
@@ -1059,6 +1060,56 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
   })
 
 /**
+ * 自定义端点的会话标题。
+ *
+ * 内置 DeepSeek 端点靠私有的 title 扩展随主请求返回标题；其他方言没有这个
+ * 能力，由服务端用同一条端点再发一次小请求生成。失败静默忽略——标题只是
+ * 锦上添花，不该在界面上冒错误。用户在这期间手动改过标题的话不覆盖。
+ */
+const requestTitle = async (sessionId: string, reply: AssistantMessage) => {
+  const session = getSession(sessionId)
+  if (!session || session.title) {
+    return
+  }
+  const modelConfig = resolveModel(session.modelId)
+  if (!modelConfig) {
+    return
+  }
+  const endpoint = endpointById(modelConfig.endpointId)
+  // 内置端点走 title 扩展，不需要这条路径
+  if (endpoint?.builtin) {
+    return
+  }
+  const userText = getVisibleMessages(session)
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content)
+    .join('\n')
+  const assistantText = reply.blocks
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+  if (userText.trim() === '') {
+    return
+  }
+  try {
+    const result = await sendJson<{ title: string | null }>('/api/chat/title', 'POST', {
+      modelId: modelConfig.id,
+      userText,
+      assistantText,
+    })
+    const title = result.title?.trim()
+    if (!title) {
+      return
+    }
+    // 生成期间用户可能已手动改名，不要覆盖
+    updateSession(sessionId, (current) => (current.title ? current : { ...current, title }))
+    persist(sessionId)
+  } catch {
+    // 标题生成失败不影响对话本身，忽略
+  }
+}
+
+/**
  * 请求并消费流：先补齐附件的 serverId，再发请求；流式增量按动画帧刷新内存，完成、失败或停止后落盘。
  * 补传失败时回复记为 upload 错误，可重试。
  * 服务端判定 file_id 失效时重新补传后重发，退避重试且次数有上限，超过则按原始报错收尾。
@@ -1212,7 +1263,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       }
     }
   } finally {
-    titleRequests.delete(controller)
+    const needsTitle = titleRequests.delete(controller)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
     updateReply(sessionId, reply)
@@ -1222,5 +1273,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
+    /**
+     * 自定义端点没有 DeepSeek 的 title 扩展，主请求不会带回标题。
+     * 首轮回答成功后补一次小请求生成标题；失败静默忽略，标题只是锦上添花。
+     */
+    if (needsTitle) {
+      void requestTitle(sessionId, reply)
+    }
   }
 }

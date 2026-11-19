@@ -7,7 +7,16 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：界面语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态。API Key 由服务端保管。 */
+/**
+ * 思考内容的折叠时机。
+ *
+ * - keep：保持展开，由用户自己点标题收起（默认，与原版一致）；
+ * - onAnswer：回答开始输出时自动收起，此时注意力已转到答案；
+ * - onFinish：整条回复结束后再收起，期间可以看完思考过程。
+ */
+export type ThinkingCollapse = 'keep' | 'onAnswer' | 'onFinish'
+
+/** 本机设置，存 localStorage：界面语言、主题、位置、朗读音色、深度思考与智能搜索开关、思考折叠时机、侧边栏收起状态。API Key 由服务端保管。 */
 type Settings = {
   locale: Locale
   themePreference: ThemePreference
@@ -15,6 +24,7 @@ type Settings = {
   ttsVoice: TtsVoice
   thinking: boolean
   search: boolean
+  thinkingCollapse: ThinkingCollapse
   siderCollapsed: boolean
 }
 
@@ -25,6 +35,7 @@ const KEYS = {
   ttsVoice: 'chat-demo:tts-voice',
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
+  thinkingCollapse: 'chat-demo:thinking-collapse',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
 
@@ -85,6 +96,12 @@ const initialThemePreference = (): ThemePreference => {
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
+/** 未保存过时保持展开，与原版行为一致 */
+const initialThinkingCollapse = (): ThinkingCollapse => {
+  const saved = read(KEYS.thinkingCollapse)
+  return saved === 'onAnswer' || saved === 'onFinish' ? saved : 'keep'
+}
+
 export const useSettings = create<Settings>(() => ({
   locale: initialLocale(),
   location: initialLocation(),
@@ -92,6 +109,7 @@ export const useSettings = create<Settings>(() => ({
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
+  thinkingCollapse: initialThinkingCollapse(),
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
 
@@ -124,6 +142,11 @@ export const setThinking = (thinking: boolean) => {
 export const setSearch = (search: boolean) => {
   write(KEYS.search, String(search))
   useSettings.setState({ search })
+}
+
+export const setThinkingCollapse = (thinkingCollapse: ThinkingCollapse) => {
+  write(KEYS.thinkingCollapse, thinkingCollapse)
+  useSettings.setState({ thinkingCollapse })
 }
 
 export const setSiderCollapsed = (siderCollapsed: boolean) => {

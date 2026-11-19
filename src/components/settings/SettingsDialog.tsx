@@ -5,6 +5,7 @@ import {
   IconDataOutline16,
   IconDownloadOutline16,
   IconFollowsystemOutline16,
+  IconGlobeLanguageOutline14,
   IconLightOutline16,
   IconSettingsOutline16,
   IconUploadOutline14,
@@ -23,9 +24,11 @@ import {
   setLocale,
   setLocation,
   setThemePreference,
+  setThinkingCollapse,
   setTtsVoice,
   useSettings,
   type ThemePreference,
+  type ThinkingCollapse,
 } from '../../services/settings.js'
 import { useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
@@ -35,6 +38,7 @@ import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { ModelSettings } from './ModelSettings.js'
 import { PersonaSettings } from './PersonaSettings.js'
+import { SearchSettings } from './SearchSettings.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import { useAuth } from '../../services/server/authState.js'
 import styles from './Settings.module.css'
@@ -59,6 +63,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     value: 'personas',
     label: 'settingDialogAsidePersonasOptionLabel',
     icon: <IconDataOutline16 />,
+  },
+  {
+    value: 'search',
+    label: 'settingDialogAsideSearchOptionLabel',
+    icon: <IconGlobeLanguageOutline14 />,
   },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
@@ -109,12 +118,15 @@ const SettingsContent = () => {
               <ThemeSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
+              <ThinkingCollapseSetting />
               <LocationSetting />
             </>
           ) : section === 'models' ? (
             <ModelSettings />
           ) : section === 'personas' ? (
             <PersonaSettings />
+          ) : section === 'search' ? (
+            <SearchSettings />
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />
@@ -378,6 +390,46 @@ const themeOptions: { value: ThemePreference; label: TranslationKey; icon: React
     icon: <IconFollowsystemOutline16 />,
   },
 ]
+
+/**
+ * 思考内容的折叠时机。
+ *
+ * 默认保持展开（与原版一致），另外两种是「回答开始输出时收起」和「整条回复
+ * 结束后收起」。用下拉而不是三个并排选块：这一项是纯文字偏好，没有图标，
+ * 做成大卡片会和上面的主题块视觉重量冲突。
+ */
+const ThinkingCollapseSetting = () => {
+  const t = useTranslate()
+  const value = useSettings((state) => state.thinkingCollapse)
+  const label = t('settingsThinkingCollapse')
+  const options: { value: ThinkingCollapse; label: string }[] = [
+    { value: 'keep', label: t('settingsThinkingCollapseKeep') },
+    { value: 'onAnswer', label: t('settingsThinkingCollapseOnAnswer') },
+    { value: 'onFinish', label: t('settingsThinkingCollapseOnFinish') },
+  ]
+  return (
+    <SettingCell
+      label={label}
+      description={t(
+        value === 'keep'
+          ? 'settingsThinkingCollapseKeepHint'
+          : value === 'onAnswer'
+            ? 'settingsThinkingCollapseOnAnswerHint'
+            : 'settingsThinkingCollapseOnFinishHint'
+      )}
+      status={null}
+      action={
+        <Select
+          ariaLabel={label}
+          className={styles.localeSelect}
+          value={value}
+          options={options}
+          onChange={(next) => setThinkingCollapse(next)}
+        />
+      }
+    />
+  )
+}
 
 /**
  * 主题项：标题下方浅色 / 深色 / 跟随系统三个选块。

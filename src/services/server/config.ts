@@ -59,6 +59,8 @@ type ConfigState = {
   personas: Persona[]
   endpoints: Endpoint[]
   models: ModelConfig[]
+  /** 兜底搜索是否配好；决定「智能搜索」按钮是否可用 */
+  searchConfigured: boolean
   loaded: boolean
 }
 
@@ -66,6 +68,7 @@ export const useConfig = create<ConfigState>(() => ({
   personas: [],
   endpoints: [],
   models: [],
+  searchConfigured: false,
   loaded: false,
 }))
 
@@ -74,8 +77,9 @@ export const loadConfig = async (): Promise<void> => {
     personas: Persona[]
     endpoints: Endpoint[]
     models: ModelConfig[]
+    searchConfigured?: boolean
   }>('/api/config')
-  useConfig.setState({ ...data, loaded: true })
+  useConfig.setState({ ...data, searchConfigured: data.searchConfigured === true, loaded: true })
 }
 
 /** 配置改动后重新拉取，保持本地副本与服务端一致 */
@@ -212,3 +216,49 @@ export const setModelEnabled = async (model: ModelConfig, enabled: boolean): Pro
 export const testEndpoint = async (endpointId: string): Promise<void> => {
   await sendJson('/api/config/test-endpoint', 'POST', { endpointId })
 }
+
+/**
+ * 搜索服务配置。
+ *
+ * 与模型端点完全解耦：配一次就能给所有不支持原生搜索的模型用。
+ * 内置 DeepSeek 端点不参与，它有自己的原生搜索。
+ */
+export type SearchConfig = {
+  enabled: boolean
+  preset: 'deepseek' | 'custom'
+  url: string
+  headers: string
+  resultsPath: string
+  titleField: string
+  urlField: string
+  snippetField: string
+  /** 网页正文抓取地址；留空表示不支持读取网页 */
+  fetchUrl: string
+}
+
+export type SearchConfigView = SearchConfig & {
+  /** 服务端是否已有 Key；Key 本身不下发 */
+  hasKey: boolean
+  /** enabled 且填了地址与 Key */
+  configured: boolean
+}
+
+export type SearchTestResult = {
+  latencyMs: number
+  hits: { title: string; url: string; snippet: string | null }[]
+}
+
+export const getSearchConfig = async (): Promise<SearchConfigView> =>
+  getJson<SearchConfigView>('/api/config/search')
+
+/** 保存；apiKey 不传表示保持不变，传空串才清空 */
+export const saveSearchConfig = async (
+  config: SearchConfig & { apiKey?: string }
+): Promise<void> => {
+  await sendJson('/api/config/search', 'POST', config)
+}
+
+export const testSearchConfig = async (
+  config: SearchConfig & { apiKey?: string; query?: string }
+): Promise<SearchTestResult> =>
+  sendJson<SearchTestResult>('/api/config/search/test', 'POST', config)

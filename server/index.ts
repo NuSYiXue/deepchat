@@ -11,13 +11,13 @@ import { fileURLToPath } from 'node:url'
 import type { ServerResponse } from 'node:http'
 import { createAuth, createSecret } from './auth.ts'
 import { openDatabase, seedEndpoints } from './db.ts'
-import { HttpError, json, remoteAddressOf, sendResponse, toRequest } from './http.ts'
+import { HttpError, json, readJson, remoteAddressOf, sendResponse, toRequest } from './http.ts'
 import { createRouter } from './router.ts'
 import { createStaticHandler } from './static.ts'
 import { chatRoutes } from './routes/chat.ts'
 import { configRoutes } from './routes/config.ts'
 import { sessionRoutes } from './routes/sessions.ts'
-import { formatHits, relaySearch } from './search.ts'
+import { formatHits, readSearchConfig, runSearch, writeSearchConfig, isSearchConfigured, type SearchConfig } from './search.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..')
@@ -164,6 +164,9 @@ router.post('/api/config/test-model', async ({ req }) => {
   return json(await chat.testModel(body.modelId))
 })
 
+// 自定义端点没有 DeepSeek 的 title 扩展，用它单独生成会话标题
+router.post('/api/chat/title', async ({ req }) => json(await chat.generateTitle(req)))
+
 router.post('/api/config/test-endpoint', async ({ req }) => {
   const body = (await req.json()) as { endpointId?: unknown }
   if (typeof body.endpointId !== 'string') {
@@ -172,14 +175,85 @@ router.post('/api/config/test-endpoint', async ({ req }) => {
   return json(await chat.verify(body.endpointId))
 })
 
-// ---- 搜索（方案 B：借用支持搜索的端点） ----
+// ---- 搜索 ----
+// 搜索服务与模型端点解耦：由设置页单独配置，供不支持原生搜索的模型使用。
 router.post('/api/search', async ({ req }) => {
   const body = (await req.json()) as { query?: unknown }
   if (typeof body.query !== 'string' || body.query.trim() === '') {
     throw new HttpError(400, 'query is required')
   }
-  const hits = await relaySearch(db, body.query, req.signal)
+  const hits = await runSearch(readSearchConfig(db), body.query, req.signal)
   return json({ hits, text: formatHits(hits) })
+})
+
+/** 读取搜索配置。API Key 只入不出，与端点一样返回 hasKey 标记。 */
+router.get('/api/config/search', () => {
+  const config = readSearchConfig(db)
+  return json({
+    ...config,
+    apiKey: undefined,
+    hasKey: config.apiKey.trim() !== '',
+    configured: isSearchConfigured(config),
+  })
+})
+
+/** 保存搜索配置；apiKey 缺省表示保持不变，空字符串才是清空。 */
+router.post('/api/config/search', async ({ req }) => {
+  const body = (await readJson<Record<string, unknown>>(req)) as Partial<SearchConfig> & {
+    hasKey?: unknown
+  }
+  const current = readSearchConfig(db)
+  const next: SearchConfig = {
+    ...current,
+    enabled: body.enabled === true,
+    preset: body.preset === 'custom' ? 'custom' : 'deepseek',
+    url: typeof body.url === 'string' ? body.url.trim() : current.url,
+    apiKey:
+      typeof body.apiKey === 'string' ? body.apiKey.trim() : current.apiKey,
+    headers: typeof body.headers === 'string' ? body.headers : current.headers,
+    resultsPath:
+      typeof body.resultsPath === 'string' ? body.resultsPath : current.resultsPath,
+    titleField: typeof body.titleField === 'string' ? body.titleField : current.titleField,
+    urlField: typeof body.urlField === 'string' ? body.urlField : current.urlField,
+    snippetField:
+      typeof body.snippetField === 'string' ? body.snippetField : current.snippetField,
+    fetchUrl: typeof body.fetchUrl === 'string' ? body.fetchUrl.trim() : current.fetchUrl,
+  }
+  if (next.enabled && next.url === '') {
+    throw new HttpError(400, 'url is required when search is enabled')
+  }
+  writeSearchConfig(db, next)
+  return json({ ok: true })
+})
+
+/** 用给定（或已保存的）配置试搜一次，供设置页的「测试搜索」用 */
+router.post('/api/config/search/test', async ({ req }) => {
+  const body = (await readJson<Record<string, unknown>>(req)) as Partial<SearchConfig> & {
+    query?: unknown
+  }
+  const current = readSearchConfig(db)
+  const probe: SearchConfig = {
+    ...current,
+    preset: body.preset === 'custom' ? 'custom' : body.preset === 'deepseek' ? 'deepseek' : current.preset,
+    url: typeof body.url === 'string' ? body.url.trim() : current.url,
+    apiKey: typeof body.apiKey === 'string' ? body.apiKey.trim() : current.apiKey,
+    headers: typeof body.headers === 'string' ? body.headers : current.headers,
+    resultsPath:
+      typeof body.resultsPath === 'string' ? body.resultsPath : current.resultsPath,
+    titleField: typeof body.titleField === 'string' ? body.titleField : current.titleField,
+    urlField: typeof body.urlField === 'string' ? body.urlField : current.urlField,
+    snippetField:
+      typeof body.snippetField === 'string' ? body.snippetField : current.snippetField,
+    fetchUrl: typeof body.fetchUrl === 'string' ? body.fetchUrl.trim() : current.fetchUrl,
+  }
+  // 测试时不看 enabled，否则用户勾选顺序不同会莫名失败
+  probe.enabled = true
+  const query = typeof body.query === 'string' && body.query.trim() !== ''
+    ? body.query.trim()
+    : '今天北京天气'
+  const started = Date.now()
+  const hits = await runSearch(probe, query)
+  return json({ ok: true, latencyMs: Date.now() - started, hits })
 })
 
 // ---- 语音 ----

@@ -7,7 +7,7 @@ export const en = {
   settingsSearchModels: 'Search models',
   settingsUpdateModelList: 'Update list',
   settingsModelAlreadyAdded: 'Already added',
-  searchUnavailableTooltip: 'Neither this model nor the DeepSeek fallback supports web search',
+  searchUnavailableTooltip: 'This model has no native web search and no search service is configured',
   sendUnavailableModelDisabled: 'This model is disabled. Select another model to send.',
   selectModelDisabledPlaceholder: 'Model disabled — select another',
   settingsModelEnabled: 'Enable this model',
@@ -168,9 +168,58 @@ export const en = {
   settingsLocationCity: 'Select city',
   settingsLocationRegion: 'Select country or region',
   settingDialogAsideGeneralOptionLabel: 'General',
+
+  // ---- Thinking block collapsing ----
+  settingsThinkingCollapse: 'Thinking block',
+  settingsThinkingCollapseKeep: 'Stay expanded',
+  settingsThinkingCollapseKeepHint:
+    'Keep the reasoning visible; click the title to collapse it manually.',
+  settingsThinkingCollapseOnAnswer: 'Collapse when the answer starts',
+  settingsThinkingCollapseOnAnswerHint:
+    'Collapse automatically as soon as the answer begins streaming.',
+  settingsThinkingCollapseOnFinish: 'Collapse when the reply finishes',
+  settingsThinkingCollapseOnFinishHint:
+    'Collapse once the whole reply is done, so you can follow the reasoning while it streams.',
   settingDialogAsideModelsOptionLabel: 'Models',
   settingDialogAsidePersonasOptionLabel: 'Personas',
+  settingDialogAsideSearchOptionLabel: 'Search',
   settingDialogAsideDataOptionLabel: 'Data',
+
+  // ---- Search service ----
+  settingsSearchEnabled: 'Enable fallback search',
+  settingsSearchEnabledHint:
+    'Used when a model has no native web search: runs one query and injects the results. The built-in DeepSeek endpoint is unaffected.',
+  settingsSearchPreset: 'Service type',
+  settingsSearchPresetDeepSeek: 'DeepSeek search',
+  settingsSearchPresetCustom: 'Custom',
+  settingsSearchPresetDeepSeekHint:
+    "DeepSeek's official /v1/tools/search endpoint. Only the API key is needed; billed per successful request.",
+  settingsSearchPresetCustomHint:
+    'Connect any search API. The request body is always {"query":"..."}; configure response fields below.',
+  settingsSearchUrl: 'Endpoint URL',
+  settingsSearchFetchUrl: 'Page fetch URL',
+  settingsSearchFetchUrlHint:
+    'When the model calls the read_url tool, this endpoint is POSTed with {"url":"..."} to fetch the page body. Leave blank to disable page reading. DeepSeek uses /v1/tools/fetch.',
+  settingsSearchKey: 'API Key',
+  settingsSearchKeyPlaceholder: 'Paste the search service API key',
+  settingsSearchKeyKeep: 'Leave blank to keep the saved key',
+  settingsSearchKeySaved: 'Key saved; leave blank to keep it',
+  settingsSearchKeyMissing: 'No key configured yet',
+  settingsSearchHeaders: 'Extra headers (JSON)',
+  settingsSearchHeadersHint:
+    'Some services expect the key in a custom header, e.g. {"X-Api-Key":"..."}. Leave blank to use Bearer only.',
+  settingsSearchResultsPath: 'Results array path',
+  settingsSearchResultsPathHint:
+    'Where the result list lives, dot-separated, e.g. results or data.items.',
+  settingsSearchFields: 'Field mapping',
+  settingsSearchFieldsHint:
+    'Field names for title, URL and snippet inside each item. Dot paths are supported.',
+  settingsSearchTitleField: 'Title field',
+  settingsSearchUrlField: 'URL field',
+  settingsSearchSnippetField: 'Snippet field',
+  settingsSearchTest: 'Test search',
+  settingsSearchTestOk: 'Search OK ({ms} ms, {count} results, first: {first})',
+  settingsSearchTestEmpty: 'Request succeeded ({ms} ms) but returned no results',
   avatarMenuSettingsDialogThemeItemLabel: 'Theme',
   avatarMenuSettingsDialogThemeSelectLightOption: 'Light',
   avatarMenuSettingsDialogThemeSelectDarkOption: 'Dark',

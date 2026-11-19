@@ -154,6 +154,17 @@
   cursor: default;
 }
 
+/* 一组互斥选项里的当前选中项（如搜索服务的预设切换） */
+.secondaryButtonActive {
+  border-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+
+  &:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
 /* 卡片头部的按钮用紧凑尺寸 */
 .rowActions .secondaryButton,
 .rowActions .dangerButton {
