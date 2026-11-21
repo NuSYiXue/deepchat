@@ -1,4 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { resizeUploadImage } from '../../utils/resizeUploadImage.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
 import type {
@@ -107,7 +108,8 @@ export const uploadFile = async (
   if (purpose) {
     form.append('purpose', purpose)
   }
-  form.append('file', file)
+  // 图片在客户端按长边上限缩放后再上传（服务端原样转发，不做尺寸处理）。
+  form.append('file', purpose === null ? await resizeUploadImage(file, signal) : file)
   const query = modelId ? `?modelId=${encodeURIComponent(modelId)}` : ''
   const response = await request(`${UPLOAD_ENDPOINT}${query}`, {
     method: 'POST',

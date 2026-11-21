@@ -1,6 +1,6 @@
 {
   "name": "deepchat",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "基于 DeepSeek API 的聊天应用，自带 Node 服务端，多端通过浏览器访问。",
   "license": "MIT",
   "private": true,
