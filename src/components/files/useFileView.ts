@@ -16,7 +16,7 @@ const createViewUrl = (original: Blob, type: string) => {
   })
 }
 
-/** 草稿传 File，已发送的附件传 IndexedDB 原件 ID。 */
+/** 草稿传 File，已发送的附件传文件 ID（loadFile 会从服务端取回原件）。 */
 export const useFileView = (source: File | string, name: string) => {
   const type = getFileViewType(name)
   const [state, setState] = useState<{ source: File | string; type: string; url: string | null }>()

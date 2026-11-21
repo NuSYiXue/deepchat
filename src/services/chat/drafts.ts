@@ -12,7 +12,7 @@ import {
 import type { FileAttachment } from './types.js'
 
 export type DraftAttachment = {
-  /** 本地标识，也是 IndexedDB 原件与上传任务的 key */
+  /** 本地标识，也是上传任务与落盘原件的 key */
   id: string
   file: File
   isImage: boolean
@@ -96,7 +96,7 @@ const currentModelId = (sessionId: string | null): string | undefined =>
   resolveModelId?.(sessionId)
 
 const upload = (sessionId: string | null, attachment: DraftAttachment) => {
-  // 内联模式不发请求：附件原件已经存在 IndexedDB，发送时直接转 base64。
+  // 内联模式不发请求：原件就在 attachment.file 上，发送时直接转 base64。
   // 这里必须提前 return，否则会去打端点必然不存在的 Files API。
   if (currentInlineFiles(sessionId)) {
     return

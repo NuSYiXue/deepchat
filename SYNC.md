@@ -28,7 +28,7 @@
 
 - 若改动在 `src/services/api/client.ts` —— 大概率要重写，不能直接接受上游版本。我们的 `CHAT_ENDPOINT = '/api/chat'`、`UPLOAD_ENDPOINT = '/api/upload'`。
 - 若改动引入新的浏览器端密钥读取（`apiKey` 参数、`localStorage` 里的 key）—— 必须改成服务端取。
-- 若改动是纯 UI / 纯本地逻辑（渲染、样式、i18n、IndexedDB 读数）—— 通常可以直接接受。
+- 若改动是纯 UI / 纯本地逻辑（渲染、样式、i18n）—— 通常可以直接接受。
 
 ### 已知的、合并上游时踩过或差点踩的坑
 
@@ -266,8 +266,6 @@ resultsPath / titleField / urlField / snippetField / fetchUrl
 > 踩过的坑：内联实现最初只用 `loadFile(id)` 取原件。草稿阶段的附件原件还没上传到服务端（`pendingFiles` 只在 `sendMessage` 时才写入并落盘），所以那一刻取不到，附件块被静默跳过，模型只收到文字——表现为「图片已发送但模型说看不到」。现在草稿优先用 `file.blob`，只有历史轮次才走 `loadFile`。
 
 **已知代价**：**历史轮次的附件也会重复内联**。`toRequestMessages` 对 `getContextRounds(history)` 的每一轮都调用同一套 `toFileBlocks`，多轮对话会显著增大请求体积（每轮图片都重新 base64 一遍）。内置端点用 `file_id` 没有这个问题。
-
-**历史附件的原件从哪来**：发送时 `sendMessage` 把原件放进 `pendingFiles`，`saveSession` 随即上传到服务端落盘（`PUT /api/files/:id`）。历史轮次没有内存 `blob`，但 `loadFile(id)` 在服务端化后改为从 `GET /api/files/:id` 下载，因此历史图片仍能内联——前提是当初那次发送时原件成功落过盘。
 
 ### 上传链路必须带 `modelId`
 

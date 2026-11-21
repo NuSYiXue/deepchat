@@ -17,12 +17,13 @@ import type {
 } from './types.js'
 
 /**
- * 文件块的两种引用方式：
- * - 端点有 Files API：按 file_id 引用，请求体里只有一个 id；
- * - 没有 Files API：把本地原件转 base64 内联进去（第三方 Anthropic 端点的通用做法）。
+ * 文件块的两种引用方式（走哪条由 store.ts 的 inlineFilesFor 决定）：
+ * - 内置 DeepSeek 官方端点：按 file_id 引用，请求体里只有一个 id；
+ * - 其余端点：把原件转 base64 内联进去（Anthropic 协议的通用做法）。
  *
- * 内联需要读 IndexedDB 取原件，因此这里返回 Promise；拿不到原件的附件直接跳过，
- * 与「serverId 为空」时的处理一致——附件只在本地展示，不进入请求。
+ * 内联要先拿到原件，因此这里返回 Promise。原件来源见 toInlineBlock：草稿用
+ * 内存里的 blob，历史轮次用 loadFile 从服务端取回。都拿不到就跳过——附件只在
+ * 本地展示，不进入请求。
  */
 const base64Of = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -51,8 +52,11 @@ const toInlineBlock = async (
   file: FileAttachment
 ): Promise<FileBlockParam | string | null> => {
   /**
-   * 优先用附件自带的原件：草稿附件只在内存里，IndexedDB 是空的。
-   * 只有历史导入的附件才可能落过盘，那条路径才需要回退到 loadFile。
+   * 两条来源：
+   * - 本轮草稿：原件还在内存里，只在 file.blob 上（此时尚未上传到服务端，
+   *   loadFile 一定取不到）；
+   * - 历史轮次：blob 不在内存，但发送时 saveSession 已把原件 POST 到
+   *   /api/files/:id 落盘，loadFile 从那里下载。
    */
   const blob = file.blob ?? (await loadFile(file.id).catch(() => null))
   if (!blob) {

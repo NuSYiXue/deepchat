@@ -10,9 +10,16 @@ import type {
 } from '../api/types.js'
 
 /**
- * 消息附件。id 是本地标识（IndexedDB files 表的主键，原件按它存储，所有引用同一 id 的消息共用一份），
- * 导入的附件沿用导出产物里的文件 ID；本地没有原件的附件只展示文件名，不进入请求。
- * serverId 是 Files API 返回的 file_id，导入的数据或尚未上传成功的文件为 null，发送前补传。
+ * 消息附件。
+ *
+ * id 是本地标识，所有引用同一 id 的消息共用一份原件；导入的附件沿用导出产物
+ * 里的文件 ID。
+ *
+ * 原件存在服务端（发送时 POST /api/files/:id），因此任何已成功发送过的附件都
+ * 能读回；只有导入数据里缺原件的附件才只有元数据，只展示文件名、不进入请求。
+ *
+ * serverId 是 Files API 返回的 file_id，只有走 Files API 的端点（内置官方端点）
+ * 才用得上；内联端点该字段恒为 null。
  */
 export type FileAttachment = {
   id: string
@@ -26,10 +33,11 @@ export type FileAttachment = {
   /** 具体 MIME；导入时没有原件或无法识别的为空字符串，不影响图片身份。 */
   mimeType: string
   /**
-   * 内存里的原件，仅草稿附件在本次发送时携带。
+   * 内存里的原件，仅本轮草稿附件在发送时携带。
    *
-   * 普通对话添加的附件原件**从不写 IndexedDB**（只有历史导入会落盘），所以
-   * 内联发送必须直接用这个 File；缺失时才回退到 IndexedDB（历史附件场景）。
+   * 草稿阶段原件还没上传到服务端，只有这份内存副本可用；历史轮次没有它，
+   * 改为用 loadFile 从 /api/files/:id 取回。落库前会被剥掉（db.ts 的
+   * withoutBlobs），因为 blob 序列化成 JSON 只会是 `{}`。
    */
   blob?: Blob
 }

@@ -604,7 +604,8 @@ export const setSessionModel = (id: string, modelId: string | null): void => {
 }
 
 /**
- * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
+ * 删除会话。服务端删除后会按「全库引用并集」清理没人引用的原件；
+ * 上游的 Files API 文件不删——导入、编辑、重新生成都会复用同一个附件，
  * 同一服务端文件可能被多个会话引用，不维护引用计数。
  */
 export const removeSession = (id: string): Promise<boolean> => {
@@ -932,8 +933,9 @@ const saveServerIds = (sessionId: string, serverIds: ReadonlyMap<string, string 
 }
 
 /**
- * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
- * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
+ * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则取回原件补传。
+ * 原件存在服务端（发送时 POST /api/files/:id），loadFile 从那里下载；取不到
+ * 说明这份附件只有元数据（如导入数据里缺原件），返回 null，只展示不进入请求。
  */
 const ensureServerId = async (
   file: FileAttachment,
@@ -1080,7 +1082,7 @@ const collectServerFileIds = (request: Request): Set<string> => {
 
 /**
  * 服务端判定 file_id 失效时，清掉对应附件的 serverId 并丢弃旧的上传任务，
- * 下一次补齐会重新读取本地原件上传。报错里点名了 file_id 就只重置这些，
+ * 下一次补齐会重新取回原件上传。报错里点名了 file_id 就只重置这些，
  * 没点名（如 invalid file_id）则重置本次请求用到的全部附件。
  */
 const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: unknown): boolean => {

@@ -235,7 +235,7 @@ export const commitStaging = async (): Promise<SessionSummary[]> => {
   return summaries
 }
 
-/** 本地存储失败不打断对话，只在控制台留痕 */
+/** 存储失败不打断对话，只在控制台留痕 */
 export const reportStorageError = (action: string) => (error: unknown) => {
   // eslint-disable-next-line no-console
   console.error(`[storage] ${action} failed`, error)
