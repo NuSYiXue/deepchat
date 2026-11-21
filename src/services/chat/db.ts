@@ -69,12 +69,32 @@ export const loadSession = async (id: string): Promise<Session | undefined> => {
   }
 }
 
+/**
+ * 落盘前剥掉附件的内存原件。blob 只用于本次发送时的内联编码，序列化成
+ * JSON 只会得到 `{}`，白白增加请求体积。
+ */
+const withoutBlobs = (session: Session): Session => ({
+  ...session,
+  messages: session.messages.map((message) =>
+    message.role === 'user' && message.files.some((file) => file.blob !== undefined)
+      ? {
+          ...message,
+          files: message.files.map((file) => {
+            const { blob, ...rest } = file
+            void blob
+            return rest
+          }),
+        }
+      : message
+  ),
+})
+
 export const saveSession = async (session: Session, files: StoredFile[] = []): Promise<void> => {
   // 原件先落盘，再提交会话快照，避免会话引用了还不存在的文件
   for (const file of files) {
     await uploadFile(file)
   }
-  await sendJson(`/api/sessions/${encodeURIComponent(session.id)}`, 'PUT', session)
+  await sendJson(`/api/sessions/${encodeURIComponent(session.id)}`, 'PUT', withoutBlobs(session))
 }
 
 export const renameSession = async (id: string, title: string): Promise<void> => {

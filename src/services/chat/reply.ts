@@ -50,8 +50,11 @@ const MAX_INLINE_TEXT_CHARS = 200_000
 const toInlineBlock = async (
   file: FileAttachment
 ): Promise<FileBlockParam | string | null> => {
-  // 本地原件已随附件存进 IndexedDB；读不到就跳过（只展示、不进请求）
-  const blob = await loadFile(file.id).catch(() => null)
+  /**
+   * 优先用附件自带的原件：草稿附件只在内存里，IndexedDB 是空的。
+   * 只有历史导入的附件才可能落过盘，那条路径才需要回退到 loadFile。
+   */
+  const blob = file.blob ?? (await loadFile(file.id).catch(() => null))
   if (!blob) {
     return null
   }

@@ -724,7 +724,8 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
+    // blob 只在内存里流转，不落库：内联端点发送时直接用，持久化层会丢弃它
+    files: files.map(({ id, serverId, name, size, isImage, mimeType, blob }) => ({
       id,
       serverId,
       // 草稿附件已上传成功，每张图片都在上传前检查过长边，超限的已缩小。
@@ -733,6 +734,7 @@ export const sendMessage = (targetSessionId: string | null) => {
       size,
       isImage,
       mimeType,
+      ...(blob ? { blob } : {}),
     })),
     createdAt: now,
   }

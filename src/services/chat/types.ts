@@ -25,6 +25,13 @@ export type FileAttachment = {
   isImage: boolean
   /** 具体 MIME；导入时没有原件或无法识别的为空字符串，不影响图片身份。 */
   mimeType: string
+  /**
+   * 内存里的原件，仅草稿附件在本次发送时携带。
+   *
+   * 普通对话添加的附件原件**从不写 IndexedDB**（只有历史导入会落盘），所以
+   * 内联发送必须直接用这个 File；缺失时才回退到 IndexedDB（历史附件场景）。
+   */
+  blob?: Blob
 }
 
 /** 本地消息的分支关系；字段缺省时按线性消息列表处理。 */
