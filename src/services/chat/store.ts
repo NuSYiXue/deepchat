@@ -23,6 +23,7 @@ import {
   getDraft,
   prepareDraftMessage,
   registerInputTypeResolver,
+  registerModelIdResolver,
   usePendingSelection,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
@@ -82,6 +83,18 @@ registerInputTypeResolver((sessionId) => {
   const pending = usePendingSelection.getState().modelId
   const session = sessionId !== null ? getSession(sessionId) : undefined
   return resolveModel(sessionId === null ? pending : session?.modelId)?.inputTypes
+})
+/**
+ * 草稿附件上传用哪个模型定位端点。
+ *
+ * 必须与聊天请求同一口径：新会话看待选模型，已有会话看会话模型。漏了它
+ * 服务端会回落到默认模型，默认模型若是不支持 Files API 的第三方端点，
+ * 上传就 501，界面显示成「服务器繁忙」，附件永远到不了完成态。
+ */
+registerModelIdResolver((sessionId) => {
+  const pending = usePendingSelection.getState().modelId
+  const session = sessionId !== null ? getSession(sessionId) : undefined
+  return resolveModel(sessionId === null ? pending : session?.modelId)?.id
 })
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
@@ -896,7 +909,10 @@ const saveServerIds = (sessionId: string, serverIds: ReadonlyMap<string, string 
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (file: FileAttachment): Promise<string | null> => {
+const ensureServerId = async (
+  file: FileAttachment,
+  modelId: string | undefined
+): Promise<string | null> => {
   if (file.serverId) {
     return file.serverId
   }
@@ -908,7 +924,7 @@ const ensureServerId = async (file: FileAttachment): Promise<string | null> => {
   if (!blob) {
     return null
   }
-  return uploadAttachment(file.id, blob, file.name, file.isImage)
+  return uploadAttachment(file.id, blob, file.name, file.isImage, modelId)
 }
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
@@ -935,6 +951,9 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  */
 const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
   const epoch = historyEpoch
+  // 补传同样要带上会话模型：服务端按模型定位端点，缺省会落到默认模型，
+  // 默认模型是不支持 Files API 的第三方端点时补传必然 501。
+  const uploadModelId = resolveModel(getSession(sessionId)?.modelId)?.id
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
@@ -956,7 +975,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
       // 密钥在服务端，这里没有 apiKey 参数；ID 未变化时不写回，避免多余的会话落库。
-      const serverId = await ensureServerId(file)
+      const serverId = await ensureServerId(file, uploadModelId)
       if (serverId && serverId !== file.serverId) {
         serverIds.set(file.id, serverId)
       }
@@ -984,7 +1003,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   for (const file of pending.values()) {
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(file), aborted])
+      const serverId = await Promise.race([ensureServerId(file, uploadModelId), aborted])
       if (serverId) {
         serverIds.set(file.id, serverId)
         saveServerIds(sessionId, new Map([[file.id, serverId]]))

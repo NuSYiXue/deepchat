@@ -1110,7 +1110,12 @@ export const chatRoutes = ({ db }: { db: DatabaseSync }) => {
     ): Promise<{ id: string }> => {
       const { endpoint } = resolveEndpoint(modelId)
       if (!capabilitiesFor(endpoint).filesApi) {
-        throw new HttpError(501, 'this endpoint does not support the Files API')
+        /**
+         * 用 400 而不是 501：501 属于 5xx，客户端会归类成「服务器繁忙」并当作
+         * 可重试错误，用户看到的是「服务器繁忙」这种误导性提示，重试也永远不会
+         * 成功。这里是端点能力缺失，不是临时故障。
+         */
+        throw new HttpError(400, 'files_api_unsupported: this endpoint does not support the Files API')
       }
       const form = await req.formData()
 

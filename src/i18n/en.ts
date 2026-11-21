@@ -270,6 +270,7 @@ export const en = {
   uploadMaxFiles: 'You can upload up to {count} files',
   uploadFileStatusUploading: 'Uploading...',
   uploadServerBusy: 'Server busy',
+  uploadFilesApiUnsupported: "This model's endpoint does not support file attachments. Try another model.",
   uploadParseFailed: 'Parsing failed',
   uploadFileCountLimit: 'Uploaded file limit reached ({limit} files). ',
   uploadStorageLimit: 'Uploaded file storage limit reached ({limit} GB). ',

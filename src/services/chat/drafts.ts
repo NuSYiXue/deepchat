@@ -78,13 +78,31 @@ export const registerInputTypeResolver = (resolver: InputTypeResolver) => {
 const currentInputTypes = (sessionId: string | null): string[] | undefined =>
   resolveInputTypes?.(sessionId)
 
-const upload = (attachment: DraftAttachment) => {
+/**
+ * 当前会话生效的模型 id。
+ *
+ * 上传必须带上它：服务端按模型定位端点，缺省会回落到「默认模型」——默认模型
+ * 若是第三方端点而它没有 Files API，上传就 501，界面显示「服务器繁忙」，
+ * 附件永远到不了完成态，连纯文字都发不出去。同样是循环依赖，由 store 注册。
+ */
+type ModelIdResolver = (sessionId: string | null) => string | undefined
+let resolveModelId: ModelIdResolver | null = null
+
+export const registerModelIdResolver = (resolver: ModelIdResolver) => {
+  resolveModelId = resolver
+}
+
+const currentModelId = (sessionId: string | null): string | undefined =>
+  resolveModelId?.(sessionId)
+
+const upload = (sessionId: string | null, attachment: DraftAttachment) => {
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
   void uploadAttachment(
     attachment.id,
     attachment.file,
     attachment.file.name,
-    attachment.isImage
+    attachment.isImage,
+    currentModelId(sessionId)
   ).catch(() => {})
 }
 
@@ -112,14 +130,14 @@ export const addDraftFiles = (
     })
   )
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
-  added.forEach((attachment) => upload(attachment))
+  added.forEach((attachment) => upload(sessionId, attachment))
   return null
 }
 
 export const retryDraftAttachment = (sessionId: string | null, attachmentId: string) => {
   const attachment = getDraft(sessionId).attachments.find((item) => item.id === attachmentId)
   if (attachment) {
-    upload(attachment)
+    upload(sessionId, attachment)
   }
 }
 

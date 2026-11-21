@@ -120,10 +120,15 @@ export const validateFiles = (
  * 服务端原文多为英文且较长，不直接展示。
  */
 export const describeUploadError = (error: unknown): TranslationMessage => {
+  const info = getUploadErrorInfo(error)
+  // 端点没有 Files API：换模型才能解决，重试和「服务器繁忙」的提示都会误导
+  if (info?.code === 'filesApiUnsupported') {
+    return { key: 'uploadFilesApiUnsupported' }
+  }
   if (classifyApiError(error) === 'serverBusy') {
     return { key: 'uploadServerBusy' }
   }
-  if (getUploadErrorInfo(error)?.code === 'parseFailed') {
+  if (info?.code === 'parseFailed') {
     return { key: 'uploadParseFailed' }
   }
   return { key: 'uploadFileStatusFailed' }
@@ -179,7 +184,8 @@ const enqueueUpload = (
   file: Blob,
   name: string,
   isImage: boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  modelId?: string
 ) =>
   new Promise<string>((resolve, reject) => {
     queue.push(async () => {
@@ -189,7 +195,7 @@ const enqueueUpload = (
       }
       try {
         const body = file instanceof File ? file : new File([file], name, { type: file.type })
-        resolve((await uploadFile(body, getUploadPurpose(name, isImage), signal)).id)
+        resolve((await uploadFile(body, getUploadPurpose(name, isImage), signal, modelId)).id)
       } catch (error) {
         reject(error)
       }
@@ -225,7 +231,8 @@ export const uploadAttachment = (
   id: string,
   blob: Blob,
   name: string,
-  isImage: boolean
+  isImage: boolean,
+  modelId?: string
 ): Promise<string> => {
   const current = pending.get(id)
   if (current) {
@@ -233,7 +240,7 @@ export const uploadAttachment = (
   }
   const controller = new AbortController()
   setTask(id, { status: 'uploading' })
-  const promise = enqueueUpload(blob, name, isImage, controller.signal)
+  const promise = enqueueUpload(blob, name, isImage, controller.signal, modelId)
     .then((serverId) => {
       setTask(id, { status: 'done', serverId })
       return serverId

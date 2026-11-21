@@ -81,7 +81,7 @@ export const extractFileIds = (message: string): string[] => [
 ]
 
 /** 上传失败里能识别出具体原因的情况；其余统一按「上传失败」处理 */
-export type UploadErrorCode = 'fileCountLimit' | 'storageLimit' | 'parseFailed'
+export type UploadErrorCode = 'fileCountLimit' | 'storageLimit' | 'parseFailed' | 'filesApiUnsupported'
 
 export type UploadErrorInfo = { code: UploadErrorCode; limit?: string }
 
@@ -101,6 +101,10 @@ export const getUploadErrorInfo = (error: unknown): UploadErrorInfo | null => {
     return null
   }
   const { message } = error
+  // 自建服务端的稳定错误码：该端点没有 Files API 能力，重试无意义
+  if (message.includes('files_api_unsupported')) {
+    return { code: 'filesApiUnsupported' }
+  }
   const count = /User file count limit exceeded.*?limit (\d+)/i.exec(message)
   if (count) {
     return { code: 'fileCountLimit', limit: count[1] }
