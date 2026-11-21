@@ -23,6 +23,7 @@ import {
   getDraft,
   prepareDraftMessage,
   registerInputTypeResolver,
+  registerInlineFilesResolver,
   registerModelIdResolver,
   usePendingSelection,
 } from './drafts.js'
@@ -75,6 +76,23 @@ const isBuiltinModel = (model: ModelConfig | undefined): boolean => {
 }
 
 /**
+ * 当前会话的附件是否内联发送。
+ *
+ * **只有内置的 DeepSeek 官方端点用 Files API**：它上传后按 file_id 引用，
+ * 请求体小、多轮复用不重复传图。其余端点一律把原件转 base64 内联进请求体——
+ * 这是 Anthropic 协议的标准形态，也是 ZCode / DSH 接自定义端点的做法，
+ * 不依赖任何上传接口，第三方中转站也不需要实现 Files API。
+ *
+ * 输入框的发送按钮、提交动作与请求构造三处必须用同一判断，否则会出现
+ * 「按钮可点但发不出去」或「明明能发却一直灰着」。
+ */
+export const inlineFilesFor = (sessionId: string | null): boolean => {
+  const pending = usePendingSelection.getState().modelId
+  const session = sessionId !== null ? getSession(sessionId) : undefined
+  return !isBuiltinModel(resolveModel(sessionId === null ? pending : session?.modelId))
+}
+
+/**
  * 供 drafts 在添加附件前查询当前模型的输入能力。
  *
  * 注册而不是直接 import：drafts 已经被本模块引用，反向依赖会成环。
@@ -96,6 +114,8 @@ registerModelIdResolver((sessionId) => {
   const session = sessionId !== null ? getSession(sessionId) : undefined
   return resolveModel(sessionId === null ? pending : session?.modelId)?.id
 })
+/** 附件是否需要内联（端点没有 Files API）；输入框据此放宽发送前的上传等待 */
+registerInlineFilesResolver((sessionId) => inlineFilesFor(sessionId))
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 安全审核固定开启，所有请求都走扩展模式 */
@@ -655,7 +675,11 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
   }
-  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
+  const prepared = prepareDraftMessage(
+    getDraft(targetSessionId),
+    useUploads.getState().tasks,
+    inlineFilesFor(targetSessionId)
+  )
   if (!prepared) {
     return false
   }
@@ -951,13 +975,24 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  */
 const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
   const epoch = historyEpoch
+  const requestModel = resolveModel(getSession(sessionId)?.modelId)
   // 补传同样要带上会话模型：服务端按模型定位端点，缺省会落到默认模型，
   // 默认模型是不支持 Files API 的第三方端点时补传必然 501。
-  const uploadModelId = resolveModel(getSession(sessionId)?.modelId)?.id
+  const uploadModelId = requestModel?.id
+  /**
+   * 端点没有 Files API 时，附件改为把原件内联进请求体（见 reply.ts 的 toFileBlocks）。
+   *
+   * 这种情况不做任何上传：上传必然失败，历史附件也不需要补 serverId。附件就绪
+   * 判定同样不再要求 serverId，否则发送按钮会永远置灰。
+   */
+  const inlineFiles = !isBuiltinModel(requestModel)
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
   const serverIds = new Map<string, string>()
+  if (inlineFiles) {
+    return { history: request.history, question: request.question, prefix: request.prefix }
+  }
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
     signal.addEventListener('abort', () => reject(signal.reason), { once: true })
@@ -1188,17 +1223,18 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
-        const messages = toRequestMessages(
+        const sessionForRequest = getSession(sessionId)
+        const modelConfig = resolveModel(sessionForRequest?.modelId)
+        // 端点没有 Files API 时附件走 base64 内联，不依赖上传得到的 file_id
+        const inlineFiles = !isBuiltinModel(modelConfig)
+        const messages = await toRequestMessages(
           prepared.history,
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          latestReminder,
+          inlineFiles
         )
-        // 人设与模型都取自会话：人设固定在整个会话内，模型允许中途更换，
-        // 但每条回复都会记录当时用的模型快照（AssistantMessage.model）。
-        const sessionForRequest = getSession(sessionId)
-        const modelConfig = resolveModel(sessionForRequest?.modelId)
         /**
          * 会话模型已被停用或删除：直接以错误收尾，不再发请求。
          *

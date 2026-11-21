@@ -96,6 +96,11 @@ const currentModelId = (sessionId: string | null): string | undefined =>
   resolveModelId?.(sessionId)
 
 const upload = (sessionId: string | null, attachment: DraftAttachment) => {
+  // 内联模式不发请求：附件原件已经存在 IndexedDB，发送时直接转 base64。
+  // 这里必须提前 return，否则会去打端点必然不存在的 Files API。
+  if (currentInlineFiles(sessionId)) {
+    return
+  }
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
   void uploadAttachment(
     attachment.id,
@@ -141,21 +146,44 @@ export const retryDraftAttachment = (sessionId: string | null, attachmentId: str
   }
 }
 
-/** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */
-export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
+/**
+ * 当前会话是否走「附件内联」：端点没有 Files API 时不需要 serverId，
+ * 附件在原位转 base64 随请求发出。由 store 注册，理由同上（避免循环依赖）。
+ */
+type InlineFilesResolver = (sessionId: string | null) => boolean
+let resolveInlineFiles: InlineFilesResolver | null = null
+
+export const registerInlineFilesResolver = (resolver: InlineFilesResolver) => {
+  resolveInlineFiles = resolver
+}
+
+const currentInlineFiles = (sessionId: string | null): boolean =>
+  resolveInlineFiles?.(sessionId) ?? false
+
+/**
+ * 发送按钮和实际提交共用规则：有内容，且附件可用。
+ *
+ * 「可用」按端点能力分两种：有 Files API 时要求上传成功拿到 serverId；
+ * 没有时附件直接内联，只要有原件就能发，上传状态不参与判定。
+ */
+export const prepareDraftMessage = (
+  draft: Draft,
+  tasks: Record<string, UploadTask>,
+  inline = false
+) => {
   const text = draft.text.trim()
   if (!text && draft.attachments.length === 0) {
     return null
   }
-  const files: (FileAttachment & { serverId: string; blob: Blob })[] = []
+  const files: (FileAttachment & { serverId: string | null; blob: Blob })[] = []
   for (const attachment of draft.attachments) {
     const task = tasks[attachment.id]
-    if (task?.status !== 'done' || !task.serverId) {
+    if (!inline && (task?.status !== 'done' || !task.serverId)) {
       return null
     }
     files.push({
       id: attachment.id,
-      serverId: task.serverId,
+      serverId: inline ? null : (task.status === 'done' ? task.serverId : null),
       name: attachment.file.name,
       size: attachment.file.size,
       isImage: attachment.isImage,

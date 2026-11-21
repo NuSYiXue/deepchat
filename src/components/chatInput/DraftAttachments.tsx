@@ -10,14 +10,19 @@ import { useFileView } from '../files/useFileView.js'
 import styles from './ChatInput.module.css'
 
 const UPLOADING: UploadTask = { status: 'uploading' }
+/** 内联模式下附件无需上传，直接按已完成展示 */
+const DONE: UploadTask = { status: 'done', serverId: '' }
 
 /** 列表只随草稿附件变化更新；每张卡片独立订阅自己的上传状态。 */
 export const DraftAttachments = memo(function DraftAttachments({
   items,
+  inline,
   onRetry,
   onRemove,
 }: {
   items: DraftAttachment[]
+  /** 内联发送：附件不走上传，卡片直接按就绪展示 */
+  inline: boolean
   onRetry: (id: string) => void
   onRemove: (id: string) => void
 }) {
@@ -30,6 +35,7 @@ export const DraftAttachments = memo(function DraftAttachments({
         <AttachmentItem
           key={item.id}
           item={item}
+          inline={inline}
           onRetry={() => onRetry(item.id)}
           onRemove={() => onRemove(item.id)}
         />
@@ -41,16 +47,20 @@ export const DraftAttachments = memo(function DraftAttachments({
 /** 输入框里的文件：图片显示缩略图，其余显示文件卡片 */
 const AttachmentItem = ({
   item,
+  inline,
   onRetry,
   onRemove,
 }: {
   item: DraftAttachment
+  /** 内联发送：附件不走上传，没有上传任务即视为就绪 */
+  inline: boolean
   onRetry: () => void
   onRemove: () => void
 }) => {
   const t = useTranslate()
   const { image, url, link } = useFileView(item.file, item.file.name)
-  const task = useUploads((state) => state.tasks[item.id] ?? UPLOADING)
+  const uploaded = useUploads((state) => state.tasks[item.id])
+  const task: UploadTask = uploaded ?? (inline ? DONE : UPLOADING)
   const status = task.status
   const error = task.status === 'error' ? t(task.error.key, task.error.params) : undefined
   // 过大、格式不支持等重试无效的失败只提示原因，需删除后再发送

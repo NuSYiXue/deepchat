@@ -6,6 +6,7 @@ import type {
   OutputBlockStart,
   TextBlockParam,
 } from '../api/types.js'
+import { loadFile } from './db.js'
 import type {
   AssistantMessage,
   FileAttachment,
@@ -16,20 +17,85 @@ import type {
 } from './types.js'
 
 /**
- * 文件按 Files API 的 file_id（附件的 serverId）引用：图片用 image 块，其余用 document 块。
- * 发送前 streamReply 会先补齐 serverId；仍为 null 的是本地没有原件的附件，不进入请求。
+ * 文件块的两种引用方式：
+ * - 端点有 Files API：按 file_id 引用，请求体里只有一个 id；
+ * - 没有 Files API：把本地原件转 base64 内联进去（第三方 Anthropic 端点的通用做法）。
+ *
+ * 内联需要读 IndexedDB 取原件，因此这里返回 Promise；拿不到原件的附件直接跳过，
+ * 与「serverId 为空」时的处理一致——附件只在本地展示，不进入请求。
  */
-const toFileBlocks = (files: FileAttachment[]): FileBlockParam[] =>
-  files.flatMap(({ serverId, isImage }) =>
-    serverId
-      ? [
-          {
-            type: isImage ? 'image' : 'document',
-            source: { type: 'file', file_id: serverId },
-          },
-        ]
-      : []
-  )
+const base64Of = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result)
+      // readAsDataURL 产出 "data:<mime>;base64,<payload>"，只取逗号后的负载
+      resolve(result.slice(result.indexOf(',') + 1))
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+
+/**
+ * 纯文本类附件（代码、markdown、csv 等）在内联模式下直接当文本发。
+ *
+ * Anthropic 的 document 块只承载 PDF 一类可解析文档；把 .txt 塞进 document
+ * 模型读不到内容（实测会回「我看不到文件」）。DeepSeek 官方 Files API 有
+ * user_data 通道处理这类文件，内联形态没有对应物，只能展开成文本。
+ */
+const TEXTUAL_MIME = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|typescript|x-sh))/i
+/** 超过这个大小的文本不再内联：既占上下文，也多半不是「一份说明」 */
+const MAX_INLINE_TEXT_CHARS = 200_000
+
+const toInlineBlock = async (
+  file: FileAttachment
+): Promise<FileBlockParam | string | null> => {
+  // 本地原件已随附件存进 IndexedDB；读不到就跳过（只展示、不进请求）
+  const blob = await loadFile(file.id).catch(() => null)
+  if (!blob) {
+    return null
+  }
+  const mediaType = file.mimeType || blob.type || 'application/octet-stream'
+  if (!file.isImage && TEXTUAL_MIME.test(mediaType)) {
+    const text = await blob.text().catch(() => null)
+    if (text !== null && text.length <= MAX_INLINE_TEXT_CHARS) {
+      return `【附件 ${file.name}】\n${text}`
+    }
+  }
+  return {
+    type: file.isImage ? 'image' : 'document',
+    source: {
+      type: 'base64',
+      media_type: mediaType,
+      data: await base64Of(blob),
+    },
+  }
+}
+
+const toFileBlocks = async (
+  files: FileAttachment[],
+  inline: boolean
+): Promise<(FileBlockParam | TextBlockParam)[]> => {
+  const blocks: (FileBlockParam | TextBlockParam)[] = []
+  for (const file of files) {
+    if (inline) {
+      const block = await toInlineBlock(file)
+      if (typeof block === 'string') {
+        blocks.push({ type: 'text', text: block })
+      } else if (block) {
+        blocks.push(block)
+      }
+      continue
+    }
+    if (file.serverId) {
+      blocks.push({
+        type: file.isImage ? 'image' : 'document',
+        source: { type: 'file', file_id: file.serverId },
+      })
+    }
+  }
+  return blocks
+}
 
 const toReplyBlock = (block: OutputBlockStart, now: number): ReplyBlock | null => {
   switch (block.type) {
@@ -201,9 +267,12 @@ const isUsableReply = (message: Message): message is AssistantMessage =>
   !message.blocks.some((block) => block.type === 'text' && block.isTemplate) &&
   getReplyText(message) !== ''
 
-/** 有文件时用内容块数组：先文件后文本，文件按 Files API 的 file_id 引用 */
-const toUserParam = ({ content, files }: UserMessage): MessageParam => {
-  const blocks = toFileBlocks(files)
+/** 有文件时用内容块数组：先文件后文本 */
+const toUserParam = async (
+  { content, files }: UserMessage,
+  inline: boolean
+): Promise<MessageParam> => {
+  const blocks = await toFileBlocks(files, inline)
   return blocks.length === 0
     ? { role: 'user', content }
     : {
@@ -300,13 +369,14 @@ export const getContextRounds = (history: Message[]): [UserMessage, AssistantMes
  * 把会话转成请求的 messages：只保留「提问 + 有回答的回复」成对的轮次，最后接上本轮提问。
  * 失败或没有回答的轮次不进上下文。续写时末尾再带上本轮 assistant。
  */
-export const toRequestMessages = (
+export const toRequestMessages = async (
   history: Message[],
   question: UserMessage,
   prefix?: AssistantMessage,
   thinking = prefix?.thinking ?? false,
-  latestReminder?: string
-): MessageParam[] => {
+  latestReminder?: string,
+  inline = false
+): Promise<MessageParam[]> => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
   const appendReminder = (reminder: string | undefined) => {
@@ -317,15 +387,15 @@ export const toRequestMessages = (
     }
   }
   for (const [user, reply] of getContextRounds(history)) {
-    // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。
-    if (!user.content && toFileBlocks(user.files).length === 0) {
+    // 历史提问没有文字、附件也都没有可引用的内容时，提问为空，连同回答一起省略。
+    if (!user.content && (await toFileBlocks(user.files, inline)).length === 0) {
       continue
     }
     appendReminder(reply.latestReminder)
-    messages.push(toUserParam(user), toAssistantParam(reply))
+    messages.push(await toUserParam(user, inline), toAssistantParam(reply))
   }
   appendReminder(latestReminder)
-  messages.push(toUserParam(question))
+  messages.push(await toUserParam(question, inline))
   if (prefix?.prefix) {
     const assistant = toAssistantParam(prefix, true, thinking)
     // 没有非空白正文或有效思考时直接重发原问题，避免服务端拒绝空 Prefill。

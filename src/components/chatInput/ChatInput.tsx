@@ -9,7 +9,7 @@ import {
 } from '../base/icons.js'
 import { setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
-import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
+import { inlineFilesFor, sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
   addDraftFiles,
   EMPTY_DRAFT,
@@ -49,7 +49,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const draft = useDrafts((state) => state.drafts.get(sessionId) ?? EMPTY_DRAFT)
   const { text, attachments } = draft
   const setText = (value: string) => setDraftText(sessionId, value)
-  const draftReady = useUploads((state) => prepareDraftMessage(draft, state.tasks) !== null)
+  // 端点没有 Files API 时附件内联发送，不等待上传完成
+  const draftReady = useUploads((state) =>
+    prepareDraftMessage(draft, state.tasks, inlineFilesFor(sessionId)) !== null
+  )
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
@@ -199,7 +202,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         useConfig.getState().models,
         sessionId === null ? usePendingSelection.getState().modelId : sessionModelId
       ) ||
-      !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks)
+      !prepareDraftMessage(
+        getDraft(sessionId),
+        useUploads.getState().tasks,
+        inlineFilesFor(sessionId)
+      )
     ) {
       return
     }
@@ -224,7 +231,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         }
       }}
     >
-      <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
+      <DraftAttachments
+        items={attachments}
+        inline={inlineFilesFor(sessionId)}
+        onRetry={retryFile}
+        onRemove={removeFile}
+      />
       <div className={styles.textareaWrapper}>
         <textarea
           ref={textareaRef}

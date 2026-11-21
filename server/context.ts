@@ -48,12 +48,30 @@ const estimateMessage = (message: Record<string, unknown>): number => {
       total += estimateTokens(value.text)
     } else if (typeof value.thinking === 'string') {
       total += estimateTokens(value.thinking)
+    } else if (value.type === 'image' || value.type === 'document') {
+      /**
+       * 内联附件的 base64 负载不能按字符数估算：它的长度取决于文件大小，
+       * 与 token 消耗无关。按 Anthropic 的换算，一张图约 (宽×高)/750 个
+       * token，未知尺寸时按常见尺寸给一个保守值；文档按页数粗估。
+       */
+      total += estimateAttachmentTokens(value.source as Record<string, unknown> | undefined)
     } else {
-      // 工具结果、文件引用等按固定开销计
+      // 工具结果、file_id 引用等按固定开销计
       total += 100
     }
   }
   return total
+}
+
+/** 附件块的开销：base64 内联按经验值，file_id 引用本身几乎不占上下文 */
+const estimateAttachmentTokens = (source: Record<string, unknown> | undefined): number => {
+  if (source?.type !== 'base64') {
+    return 100
+  }
+  const data = typeof source.data === 'string' ? source.data : ''
+  // base64 每 4 字符对应 3 字节；文档按每页 ~1.5k token 估，图片按上限 1.6k
+  const bytes = Math.ceil((data.length * 3) / 4)
+  return bytes > 2_000_000 ? 8_000 : 1_600
 }
 
 /**
